@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Plus, Users, DollarSign, ArrowLeft, LogOut, Sparkles, Trash2, MessageSquare, MoreHorizontal } from 'lucide-react'
-import { setThemeColors, getAvatarClasses, getThemeButtonClasses } from '@/lib/utils'
+import { setThemeColors, getAvatarClasses } from '@/lib/utils'
 
 type User = { id: string; phone: string; name: string; venmo?: string }
 type Group = { id: string; name: string; themeColor?: string; theme?: 'shadcn' | 'tweakcn' }
@@ -450,13 +450,6 @@ export default function App() {
     return '#38bdf8'
   }
 
-  // Set theme colors when current group changes
-  useEffect(() => {
-    if (currentGroup) {
-      setThemeColors(resolveColor(currentGroup))
-    }
-  }, [currentGroup])
-
   if (!me) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center w-full">
@@ -506,6 +499,13 @@ export default function App() {
   // Current group
   const currentGroup = currentGroupId ? state.groups.find(g=>g.id===currentGroupId) || null : null
   const currentColor = resolveColor(currentGroup)
+
+  // Set theme colors when current group changes
+  useEffect(() => {
+    if (currentGroup) {
+      setThemeColors(resolveColor(currentGroup))
+    }
+  }, [currentGroup])
 
   const logout = () => { setMe(null); setView('home'); setCurrentGroupId(null); setShowLogoutDialog(false) }
   const goHome = () => { setView('home'); setCurrentGroupId(null) }
@@ -621,7 +621,7 @@ export default function App() {
                   <Users className="w-10 h-10 sm:w-12 sm:h-12 text-slate-400 mx-auto mb-4" />
                   <h3 className="mobile-text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">No groups yet</h3>
                   <p className="mobile-text-lg text-slate-600 dark:text-slate-400 mb-6">Create your first group to start splitting expenses with friends</p>
-                  <Button onClick={startWizard} className="mobile-button w-full sm:w-auto bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700">
+                  <Button onClick={startWizard} className="mobile-button w-full sm:w-auto theme-primary">
                     <Plus className="w-4 h-4 mr-2" />
                     Create Your First Group
                   </Button>
@@ -845,7 +845,8 @@ export default function App() {
                         <p className="mobile-text-lg text-slate-600 dark:text-slate-400 mb-6">Add your first expense to get started</p>
                         <Button 
                           onClick={() => setShowAddExpenseForm(true)}
-                          className="mobile-button bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+                          className="mobile-button"
+                          style={{background: `linear-gradient(135deg, ${currentColor}, ${currentColor}dd)`}}
                         >
                           <Plus className="w-4 h-4 mr-2" />
                           Add Your First Expense
@@ -857,7 +858,7 @@ export default function App() {
                         return (
                           <div key={e.id} className="flex items-center justify-between p-3 sm:p-4 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors touch-target">
                             <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm sm:text-base flex-shrink-0">
+                              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold text-sm sm:text-base flex-shrink-0 ${getAvatarClasses(currentColor)}`}>
                                 {payerName.charAt(0).toUpperCase()}
                               </div>
                               <div className="min-w-0 flex-1">
@@ -907,7 +908,7 @@ export default function App() {
                     return (
                       <div key={m.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800">
                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${getAvatarClasses(currentColor)}`}>
                             {m.name.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0 flex-1">
@@ -962,7 +963,7 @@ export default function App() {
                           <div key={i} className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold">
+                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${getAvatarClasses(currentColor)}`}>
                                   {from.charAt(0).toUpperCase()}
                                 </div>
                                 <span className="font-medium text-slate-900 dark:text-slate-100 text-sm">{from}</span>
@@ -976,7 +977,7 @@ export default function App() {
                               <div className="flex items-center gap-2">
                                 <span className="text-sm text-slate-600 dark:text-slate-400">to</span>
                                 <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold">
+                                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${getAvatarClasses(currentColor)}`}>
                                     {to.charAt(0).toUpperCase()}
                                   </div>
                                   <span className="font-medium text-slate-900 dark:text-slate-100 text-sm">{to}</span>

@@ -136,11 +136,24 @@
     @apply h-12 px-4 text-base rounded-lg border border-slate-300 dark:border-slate-700;
   }
   
-  /* Theme-aware colors with automatic contrast */
-  .theme-primary {
-    background-color: hsl(var(--theme-primary));
+  /* Theme-aware avatar - use single primary color */
+  .avatar-gradient {
+    background: hsl(var(--theme-primary));
     color: hsl(var(--theme-primary-foreground));
   }
+  
+  /* Theme-aware button styles - use single primary color */
+  .theme-primary {
+    background: hsl(var(--theme-primary));
+    color: hsl(var(--theme-primary-foreground));
+    border: none;
+  }
+  
+  /* Ensure proper contrast for theme buttons */
+  .theme-primary:hover {
+    opacity: 0.9;
+  }
+  
   
   .theme-primary-text {
     color: hsl(var(--theme-primary));

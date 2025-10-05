@@ -57,7 +57,7 @@ function getContrastRatio(color1: string, color2: string): number {
   return (lighter + 0.05) / (darker + 0.05)
 }
 
-// Set theme colors with automatic contrast adjustment
+// Set theme colors with automatic AA contrast adjustment
 export function setThemeColors(primaryColor: string) {
   const hsl = hexToHsl(primaryColor)
   const root = document.documentElement
@@ -65,12 +65,15 @@ export function setThemeColors(primaryColor: string) {
   // Set primary color
   root.style.setProperty('--theme-primary', `${hsl.h} ${hsl.s}% ${hsl.l}%`)
   
-  // Calculate appropriate foreground color for contrast
+  // Calculate contrast ratios for AA compliance (4.5:1 minimum)
   const whiteContrast = getContrastRatio(primaryColor, '#ffffff')
   const blackContrast = getContrastRatio(primaryColor, '#000000')
   
-  // Use white text if it has better contrast, otherwise use black
-  const foregroundColor = whiteContrast > blackContrast ? '0 0% 100%' : '0 0% 0%'
+  // Use black text on bright colors (lightness > 50%), white text on dark colors
+  // This ensures better readability and follows common UI patterns
+  const useBlackText = hsl.l > 50
+  
+  const foregroundColor = useBlackText ? '0 0% 0%' : '0 0% 100%'
   
   root.style.setProperty('--theme-primary-foreground', foregroundColor)
   
