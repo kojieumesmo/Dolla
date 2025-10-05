@@ -1,14 +1,168 @@
-# Dolla SMS Mock System
+# Dolla SMS System - Partiful-like Experience
 
-This SMS mock system allows people without accounts to receive group details, expense notifications, and settlement updates via SMS messages. The messages are displayed in the terminal for testing purposes and can later be replaced with real Twilio integration.
+This SMS system creates a **Partiful-like experience** where people can engage with expense groups without creating accounts. Non-members receive automatic SMS notifications about group activities, creating viral growth and seamless onboarding.
 
-## Features
+## 🎯 Core Concept
 
-- **Group Details SMS**: Send complete group information including members, recent expenses, and settlements
-- **New Expense Notifications**: Alert non-members about new expenses added to groups
-- **Settlement Updates**: Notify about payment requirements and settlement changes
-- **Terminal Mock**: All SMS messages are displayed in the terminal with timestamps
-- **React Integration**: UI buttons in the web app to send SMS notifications
+**Like Partiful**: People get invited to groups via SMS and can see all activity without signing up. They receive automatic updates about expenses, settlements, and group changes.
+
+**Transparent Engagement**: Non-members can fully understand group dynamics before deciding to create an account.
+
+**Viral Growth**: Each invitation creates potential new users who experience the product value first.
+
+## ✨ Features
+
+### Automatic SMS Notifications
+- **Group Invitations**: New non-members get comprehensive group details via SMS
+- **Expense Updates**: Automatic notifications when expenses are added
+- **Settlement Changes**: Updates when payment requirements change
+- **Smart Throttling**: Prevents spam with 5-minute cooldown between notifications
+
+### Seamless Onboarding
+- **No Account Required**: People can engage immediately via SMS
+- **Rich Context**: Each SMS includes group members, recent expenses, and settlements
+- **Opt-out Easy**: Reply "STOP" to unsubscribe from updates
+- **Progressive Engagement**: Non-members can become full members anytime
+
+## 🚀 How It Works
+
+### 1. Inviting Non-Members
+When adding someone to a group who doesn't have an account:
+- They're added as a "non-member" 
+- Automatically receive invitation SMS with full group context
+- Start receiving updates about group activities
+
+### 2. Automatic Updates
+Non-members automatically receive SMS when:
+- New expenses are added to the group
+- Settlement requirements change
+- Group membership changes
+
+### 3. Transparent Experience
+Each SMS includes:
+- Group name and current members
+- Recent expenses with amounts and who paid
+- Current settlement requirements
+- Total group expenses
+
+## 📱 SMS Message Examples
+
+### Group Invitation
+```
+🎉 You're invited to Trip to SF!
+
+👥 Group members (3):
+• Alice
+• Bob  
+• Charlie
+
+💰 Recent expenses:
+• Dinner at restaurant - $120.00 (Bob)
+• Hotel room - $300.00 (Alice)
+
+💵 Total: $420.00
+
+⚖️ Payments needed:
+• Charlie → Alice: $140.00
+• Bob → Alice: $20.00
+
+📱 You'll get updates via SMS. Reply STOP to opt out.
+```
+
+### New Expense Notification
+```
+💰 New Expense in Trip to SF
+
+📝 Gas for rental car
+💵 Amount: $45.00
+👤 Paid by: Bob
+📊 Your share: $15.00
+
+📱 Reply DETAILS to see full group info
+```
+
+### Settlement Update
+```
+⚖️ Settlement Update for Trip to SF
+
+📋 Payments needed:
+• Charlie → Alice: $140.00
+• Bob → Alice: $20.00
+
+📱 Reply DETAILS to see full group info
+```
+
+## 🛠 Technical Implementation
+
+### Data Structure
+```typescript
+type NonMember = { 
+  phone: string; 
+  name?: string; 
+  invitedAt: number; 
+  lastNotifiedAt?: number 
+}
+```
+
+### Automatic Notifications
+- Triggered when expenses are added
+- Smart throttling prevents spam
+- Updates non-member timestamps
+- Seamless integration with existing app
+
+### SMS Server
+- RESTful API for React app integration
+- Handles invitation, expense, and settlement SMS
+- Terminal mock for development/testing
+- Ready for Twilio integration
+
+## 🎮 Usage
+
+### For App Users
+1. **Add Members**: Use the group wizard to add people by phone
+2. **Automatic Invitations**: Non-members automatically get SMS invitations
+3. **Transparent Updates**: All group activity is shared via SMS
+4. **No Manual Work**: Everything happens automatically
+
+### For Non-Members
+1. **Receive Invitation**: Get SMS with full group context
+2. **Stay Updated**: Automatic notifications about group activities
+3. **Engage Anytime**: Can create account to become full member
+4. **Opt Out**: Reply "STOP" to unsubscribe
+
+## 🚀 Growth Strategy
+
+This creates **viral growth** because:
+- **Low Friction**: No account required to engage
+- **High Value**: People see real expense tracking in action
+- **Social Proof**: See friends actively using the app
+- **Natural Conversion**: Non-members become members organically
+
+## 🔧 Setup & Testing
+
+1. **Start Services**:
+   ```bash
+   npm start              # SMS server (port 3001)
+   cd web && npm run dev  # React app (port 5173)
+   ```
+
+2. **Test Partiful Experience**:
+   ```bash
+   node demo-partiful.js  # Full demo
+   ```
+
+3. **Manual Testing**:
+   ```bash
+   node sms-mock.js send-group-invitation +15551234567 grp_1
+   ```
+
+## 📈 Future Enhancements
+
+- **Twilio Integration**: Replace terminal mock with real SMS
+- **Rich Media**: Add group photos and receipts via MMS
+- **Interactive SMS**: Reply commands for group actions
+- **Analytics**: Track engagement and conversion rates
+- **Personalization**: Customized messages based on user behavior
 
 ## Setup
 

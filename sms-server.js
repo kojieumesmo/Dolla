@@ -123,6 +123,35 @@ function calculateSettlements(members, expenses) {
 
 // API Routes
 
+// Send group invitation SMS
+app.post('/api/sms/send-group-invitation', (req, res) => {
+  try {
+    const { phone, groupId } = req.body;
+    
+    if (!phone || !groupId) {
+      return res.status(400).json({ error: 'Phone and groupId are required' });
+    }
+    
+    const appData = loadAppData();
+    const group = appData.groups.find(g => g.id === groupId);
+    const members = appData.membersByGroupId[groupId] || [];
+    const expenses = appData.expensesByGroupId[groupId] || [];
+    const settlements = calculateSettlements(members, expenses);
+    
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+    
+    const message = smsMock.generateGroupInvitationSMS(group, members, expenses, settlements);
+    const sms = smsMock.sendSMS(phone, message);
+    
+    res.json({ success: true, sms });
+  } catch (error) {
+    console.error('Error sending group invitation SMS:', error);
+    res.status(500).json({ error: 'Failed to send SMS' });
+  }
+});
+
 // Send group details SMS
 app.post('/api/sms/send-group-details', (req, res) => {
   try {

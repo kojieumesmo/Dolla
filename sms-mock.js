@@ -75,44 +75,86 @@ function sendSMS(phone, message) {
   }
 }
 
-// Generate group details SMS
-function generateGroupDetailsSMS(group, members, expenses, settlements) {
+// Generate group invitation SMS
+function generateGroupInvitationSMS(group, members, expenses, settlements) {
   const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amountCents, 0);
   const recentExpenses = expenses.slice(-3).reverse();
   
-  let message = `🏠 ${group.name} - Group Details\n\n`;
+  let message = `🎉 You're invited to ${group.name}!\n\n`;
   
   // Members
-  message += `👥 Members (${members.length}):\n`;
+  message += `👥 Group members (${members.length}):\n`;
   members.forEach(member => {
-    message += `• ${member.name} (${formatPhone(member.phone)})\n`;
+    message += `• ${member.name}\n`;
   });
   
   // Recent expenses
   if (recentExpenses.length > 0) {
-    message += `\n💰 Recent Expenses:\n`;
+    message += `\n💰 Recent expenses:\n`;
     recentExpenses.forEach(expense => {
       const payer = members.find(m => m.phone === expense.payerPhone);
-      message += `• ${expense.description} - ${formatCurrency(expense.amountCents)} (paid by ${payer?.name || 'Unknown'})\n`;
+      message += `• ${expense.description} - ${formatCurrency(expense.amountCents)} (${payer?.name || 'Unknown'})\n`;
     });
   }
   
   // Total
-  message += `\n💵 Total Expenses: ${formatCurrency(totalExpenses)}`;
+  message += `\n💵 Total: ${formatCurrency(totalExpenses)}`;
   
   // Settlements
   if (settlements.length > 0) {
-    message += `\n\n⚖️ Settlements Needed:\n`;
+    message += `\n\n⚖️ Payments needed:\n`;
     settlements.forEach(settlement => {
       const from = members.find(m => m.phone === settlement.from);
       const to = members.find(m => m.phone === settlement.to);
-      message += `• ${from?.name || 'Unknown'} owes ${to?.name || 'Unknown'} ${formatCurrency(settlement.amount)}\n`;
+      message += `• ${from?.name || 'Unknown'} → ${to?.name || 'Unknown'}: ${formatCurrency(settlement.amount)}\n`;
     });
   } else {
     message += `\n\n✅ All settled up!`;
   }
   
-  message += `\n\n📱 Reply HELP for more options`;
+  message += `\n\n📱 You'll get updates via SMS. Reply STOP to opt out.`;
+  
+  return message;
+}
+
+// Generate group details SMS (for existing non-members)
+function generateGroupDetailsSMS(group, members, expenses, settlements) {
+  const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amountCents, 0);
+  const recentExpenses = expenses.slice(-3).reverse();
+  
+  let message = `🏠 ${group.name} - Update\n\n`;
+  
+  // Members
+  message += `👥 Members (${members.length}):\n`;
+  members.forEach(member => {
+    message += `• ${member.name}\n`;
+  });
+  
+  // Recent expenses
+  if (recentExpenses.length > 0) {
+    message += `\n💰 Recent expenses:\n`;
+    recentExpenses.forEach(expense => {
+      const payer = members.find(m => m.phone === expense.payerPhone);
+      message += `• ${expense.description} - ${formatCurrency(expense.amountCents)} (${payer?.name || 'Unknown'})\n`;
+    });
+  }
+  
+  // Total
+  message += `\n💵 Total: ${formatCurrency(totalExpenses)}`;
+  
+  // Settlements
+  if (settlements.length > 0) {
+    message += `\n\n⚖️ Payments needed:\n`;
+    settlements.forEach(settlement => {
+      const from = members.find(m => m.phone === settlement.from);
+      const to = members.find(m => m.phone === settlement.to);
+      message += `• ${from?.name || 'Unknown'} → ${to?.name || 'Unknown'}: ${formatCurrency(settlement.amount)}\n`;
+    });
+  } else {
+    message += `\n\n✅ All settled up!`;
+  }
+  
+  message += `\n\n📱 Reply STOP to opt out of updates.`;
   
   return message;
 }
@@ -391,6 +433,7 @@ if (require.main === module) {
 
 module.exports = {
   sendSMS,
+  generateGroupInvitationSMS,
   generateGroupDetailsSMS,
   generateNewExpenseSMS,
   generateSettlementUpdateSMS,
