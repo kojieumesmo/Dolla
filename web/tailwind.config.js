@@ -59,6 +59,14 @@ export default {
   				'3': 'hsl(var(--chart-3))',
   				'4': 'hsl(var(--chart-4))',
   				'5': 'hsl(var(--chart-5))'
+  			},
+  			theme: {
+  				primary: 'hsl(var(--theme-primary))',
+  				'primary-foreground': 'hsl(var(--theme-primary-foreground))',
+  				secondary: 'hsl(var(--theme-secondary))',
+  				'secondary-foreground': 'hsl(var(--theme-secondary-foreground))',
+  				accent: 'hsl(var(--theme-accent))',
+  				'accent-foreground': 'hsl(var(--theme-accent-foreground))'
   			}
   		}
   	}

@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Plus, Users, DollarSign, ArrowLeft, LogOut, Sparkles, Trash2, MessageSquare, MoreHorizontal } from 'lucide-react'
 
-type User = { id: string; phone: string; name: string }
+type User = { id: string; phone: string; name: string; venmo?: string }
 type Group = { id: string; name: string; themeColor?: string; theme?: 'shadcn' | 'tweakcn' }
 type Member = { id: string; name: string; phone: string }
 type NonMember = { phone: string; name?: string; invitedAt: number; lastNotifiedAt?: number }
@@ -52,6 +52,17 @@ function saveSession(user: User | null) { if (user) localStorage.setItem(SESSION
 function generateId(prefix: string) { return `${prefix}_${Math.random().toString(36).slice(2, 9)}_${Date.now().toString(36)}` }
 function normalizePhone(input: string) { const d = String(input||'').trim().replace(/[^\d+]/g,''); if (d.startsWith('+')) return d; if (d.length===10) return '+1'+d; return d }
 function isValidPhone(input: string) { return /^\+?\d{7,15}$/.test(normalizePhone(input)) }
+
+// Generate Venmo payment link with auto-fill parameters
+function generateVenmoLink(venmoUsername: string, amount: number, note?: string): string {
+  const baseUrl = 'https://venmo.com/code'
+  const params = new URLSearchParams({
+    user_id: venmoUsername,
+    amount: amount.toString(),
+    note: note || 'Payment from Dolla'
+  })
+  return `${baseUrl}?${params.toString()}`
+}
 
 // SMS functionality - automatic notifications for non-members
 async function sendSMS(type: 'group-invitation' | 'group-details' | 'new-expense' | 'settlement-update', phone: string, groupId: string, expenseId?: string) {
@@ -172,37 +183,47 @@ export default function App() {
     const name = memberName.trim(); const phone = normalizePhone(memberPhone)
     if (!name || !isValidPhone(phone)) return alert('Enter name and valid phone')
     
-    const members = state.membersByGroupId[currentGroupId] || []
-    const nonMembers = state.nonMembersByGroupId[currentGroupId] || []
-    
-    // Check if already a member or non-member
-    if (members.some(m => m.phone === phone)) return alert('Phone already added as member')
-    if (nonMembers.some(nm => nm.phone === phone)) return alert('Phone already invited')
-    
-    // Check if this phone belongs to an existing user
-    const existingUser = state.users.find(u => u.phone === phone)
-    
-    if (existingUser) {
-      // Add as full member
-      const mem: Member = { id: generateId('mem'), name: existingUser.name, phone }
-      setState(prev => ({
-        ...prev,
-        membersByGroupId: { ...prev.membersByGroupId, [currentGroupId]: [...members, mem] },
-      }))
-    } else {
-      // Add as non-member and send invitation SMS
-      const nonMem: NonMember = { phone, name, invitedAt: Date.now() }
-      setState(prev => ({
-        ...prev,
-        nonMembersByGroupId: { ...prev.nonMembersByGroupId, [currentGroupId]: [...nonMembers, nonMem] },
-      }))
+    setState(prev => {
+      const members = prev.membersByGroupId[currentGroupId] || []
+      const nonMembers = prev.nonMembersByGroupId[currentGroupId] || []
       
-      // Send invitation SMS
-      const group = state.groups.find(g => g.id === currentGroupId)
-      if (group) {
-        sendSMS('group-invitation', phone, currentGroupId)
+      // Check if already a member or non-member
+      if (members.some(m => m.phone === phone)) {
+        alert('Phone already added as member')
+        return prev
       }
-    }
+      if (nonMembers.some(nm => nm.phone === phone)) {
+        alert('Phone already invited')
+        return prev
+      }
+      
+      // Check if this phone belongs to an existing user
+      const existingUser = prev.users.find(u => u.phone === phone)
+      
+      if (existingUser) {
+        // Add as full member
+        const mem: Member = { id: generateId('mem'), name: existingUser.name, phone }
+        return {
+          ...prev,
+          membersByGroupId: { ...prev.membersByGroupId, [currentGroupId]: [...members, mem] },
+        }
+      } else {
+        // Add as non-member and send invitation SMS
+        const nonMem: NonMember = { phone, name, invitedAt: Date.now() }
+        const newState = {
+          ...prev,
+          nonMembersByGroupId: { ...prev.nonMembersByGroupId, [currentGroupId]: [...nonMembers, nonMem] },
+        }
+        
+        // Send invitation SMS
+        const group = prev.groups.find(g => g.id === currentGroupId)
+        if (group) {
+          sendSMS('group-invitation', phone, currentGroupId)
+        }
+        
+        return newState
+      }
+    })
     
     setMemberName(''); setMemberPhone('')
   }
@@ -217,20 +238,39 @@ export default function App() {
   const [showMessageDialog, setShowMessageDialog] = useState(false)
   const [groupMessage, setGroupMessage] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false)
+  const [showAddExpenseForm, setShowAddExpenseForm] = useState(false)
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false)
+  const [showMemberDeleteDialog, setShowMemberDeleteDialog] = useState(false)
+  const [memberToDelete, setMemberToDelete] = useState<Member | null>(null)
+  const [showAddMemberForm, setShowAddMemberForm] = useState(false)
+  const [showExpenseDeleteDialog, setShowExpenseDeleteDialog] = useState(false)
+  const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null)
+  const [venmoUsername, setVenmoUsername] = useState('')
   useEffect(() => { setPayer(members[0]?.phone) }, [members])
+  
+  // Load venmo username when settings dialog opens
+  useEffect(() => {
+    if (showSettingsDialog && me) {
+      setVenmoUsername(me.venmo || '')
+    }
+  }, [showSettingsDialog, me])
 
   // Close dropdown when clicking outside
   useEffect(() => {
-    const handleClickOutside = () => {
+    const handleClickOutside = (event: MouseEvent) => {
       if (showDropdown) {
-        setShowDropdown(false)
+        const target = event.target as Element
+        if (!target.closest('[data-dropdown-menu]')) {
+          setShowDropdown(false)
+        }
       }
     }
     if (showDropdown) {
-      document.addEventListener('mousedown', handleClickOutside)
+      document.addEventListener('click', handleClickOutside)
     }
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('click', handleClickOutside)
     }
   }, [showDropdown])
 
@@ -246,9 +286,16 @@ export default function App() {
     // Automatically notify non-members about the new expense
     notifyNonMembers(currentGroupId, 'expense-added', exp.id)
   }
-  const removeExpense = (id: string) => {
-    if (!currentGroupId) return
-    setState(prev => ({ ...prev, expensesByGroupId: { ...prev.expensesByGroupId, [currentGroupId]: expenses.filter(e => e.id !== id) } }))
+  const removeExpense = (expense: Expense) => {
+    setExpenseToDelete(expense)
+    setShowExpenseDeleteDialog(true)
+  }
+
+  const confirmRemoveExpense = () => {
+    if (!currentGroupId || !expenseToDelete) return
+    setState(prev => ({ ...prev, expensesByGroupId: { ...prev.expensesByGroupId, [currentGroupId]: expenses.filter(e => e.id !== expenseToDelete.id) } }))
+    setShowExpenseDeleteDialog(false)
+    setExpenseToDelete(null)
   }
 
   const deleteGroup = () => {
@@ -276,6 +323,89 @@ export default function App() {
     setShowMessageDialog(false)
   }
 
+  const addMemberToGroup = () => {
+    if (!currentGroupId) return
+    const name = memberName.trim(); const phone = normalizePhone(memberPhone)
+    if (!name || !isValidPhone(phone)) return alert('Enter name and valid phone')
+    
+    setState(prev => {
+      const members = prev.membersByGroupId[currentGroupId] || []
+      const nonMembers = prev.nonMembersByGroupId[currentGroupId] || []
+      
+      // Check if already a member or non-member
+      if (members.some(m => m.phone === phone)) {
+        alert('Phone already added as member')
+        return prev
+      }
+      if (nonMembers.some(nm => nm.phone === phone)) {
+        alert('Phone already invited')
+        return prev
+      }
+      
+      // Check if this phone belongs to an existing user
+      const existingUser = prev.users.find(u => u.phone === phone)
+      
+      if (existingUser) {
+        // Add as full member
+        const mem: Member = { id: generateId('mem'), name: existingUser.name, phone }
+        return {
+          ...prev,
+          membersByGroupId: { ...prev.membersByGroupId, [currentGroupId]: [...members, mem] },
+        }
+      } else {
+        // Add as non-member and send invitation SMS
+        const nonMem: NonMember = { phone, name, invitedAt: Date.now() }
+        const newState = {
+          ...prev,
+          nonMembersByGroupId: { ...prev.nonMembersByGroupId, [currentGroupId]: [...nonMembers, nonMem] },
+        }
+        
+        // Send invitation SMS
+        const group = prev.groups.find(g => g.id === currentGroupId)
+        if (group) {
+          sendSMS('group-invitation', phone, currentGroupId)
+        }
+        
+        return newState
+      }
+    })
+    
+    setMemberName(''); setMemberPhone(''); setShowAddMemberForm(false)
+  }
+
+  const removeMemberFromGroup = (member: Member) => {
+    if (!currentGroupId) return
+    setMemberToDelete(member)
+    setShowMemberDeleteDialog(true)
+  }
+
+  const confirmRemoveMember = () => {
+    if (!currentGroupId || !memberToDelete) return
+    
+    setState(prev => ({
+      ...prev,
+      membersByGroupId: {
+        ...prev.membersByGroupId,
+        [currentGroupId]: (prev.membersByGroupId[currentGroupId] || []).filter(m => m.id !== memberToDelete.id)
+      }
+    }))
+    
+    setShowMemberDeleteDialog(false)
+    setMemberToDelete(null)
+  }
+
+  const saveSettings = () => {
+    if (!me) return
+    
+    const updatedUser = { ...me, venmo: venmoUsername.trim() }
+    setState(prev => ({
+      ...prev,
+      users: prev.users.map(u => u.id === me.id ? updatedUser : u)
+    }))
+    setMe(updatedUser)
+    setShowSettingsDialog(false)
+  }
+
   const balances = useMemo(() => {
     const map: Record<string, number> = {}
     for (const m of members) map[m.phone] = 0
@@ -283,7 +413,7 @@ export default function App() {
       map[e.payerPhone] = (map[e.payerPhone] ?? 0) + e.amountCents
       const share = Math.floor(e.amountCents / e.participants.length)
       let remainder = e.amountCents - share * e.participants.length
-      e.participants.forEach((p, idx) => {
+      e.participants.forEach((p, _) => {
         const thisShare = share + (remainder > 0 ? 1 : 0)
         if (remainder > 0) remainder--
         map[p] = (map[p] ?? 0) - thisShare
@@ -369,7 +499,7 @@ export default function App() {
   const currentGroup = currentGroupId ? state.groups.find(g=>g.id===currentGroupId) || null : null
   const currentColor = resolveColor(currentGroup)
 
-  const logout = () => { setMe(null); setView('home'); setCurrentGroupId(null) }
+  const logout = () => { setMe(null); setView('home'); setCurrentGroupId(null); setShowLogoutDialog(false) }
   const goHome = () => { setView('home'); setCurrentGroupId(null) }
 
   return (
@@ -377,58 +507,96 @@ export default function App() {
       <header className="border-b border-slate-200/50 dark:border-slate-800/50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm sticky top-0 z-40">
         <div className="mobile-container mobile-padding">
           <div className="flex items-center justify-between">
-            <button 
-              className="flex items-center gap-2 sm:gap-3 touch-target text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 hover:opacity-80 transition-opacity" 
-              onClick={goHome}
-            >
-              <div className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg" style={{background: `linear-gradient(135deg, ${currentColor || '#3b82f6'}, ${currentColor || '#8b5cf6'})`}}>
-                <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
-              </div>
-              <span className="hidden xs:inline">Dolla</span>
-              {currentGroup && (
-                <span className="text-xs px-2 py-1 sm:px-3 rounded-full border-2 font-medium hidden sm:inline" style={{borderColor: currentColor, color: currentColor}}>
-                  {currentGroup.name}
-                </span>
-              )}
-            </button>
-            
-            {/* Mobile: Collapsible user info */}
-            <div className="flex items-center gap-2 sm:gap-4">
-              {/* Mobile: Show only user name, hide phone */}
-              <div className="hidden sm:flex items-center gap-4">
-                <div className="text-sm text-slate-600 dark:text-slate-400">
-                  <span className="font-medium">{me.name}</span>
-                  <span className="mx-2">·</span>
-                  <span>{me.phone}</span>
+            <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+              <button 
+                className="flex items-center gap-2 sm:gap-3 touch-target text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 hover:opacity-80 transition-opacity" 
+                onClick={goHome}
+              >
+                <div className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg" style={{background: `linear-gradient(135deg, ${currentColor || '#3b82f6'}, ${currentColor || '#8b5cf6'})`}}>
+                  <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                 </div>
-                <Button variant="ghost" size="sm" onClick={logout} className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Logout
-                </Button>
-              </div>
+                <span>Dolla</span>
+              </button>
               
-              {/* Mobile: Compact user info */}
-              <div className="sm:hidden flex items-center gap-2">
-                <div className="text-sm text-slate-600 dark:text-slate-400">
-                  <span className="font-medium">{me.name}</span>
-                </div>
-                <Button variant="ghost" size="sm" onClick={logout} className="touch-target p-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">
-                  <LogOut className="w-4 h-4" />
+              {/* Show group name as left-aligned text when in a group */}
+              {currentGroup && (
+                <>
+                  <span className="text-slate-400 dark:text-slate-500">|</span>
+                  <div className="flex-1 min-w-0">
+                    <h1 className="text-lg sm:text-xl font-semibold text-slate-900 dark:text-slate-100 truncate">
+                      {currentGroup.name}
+                    </h1>
+                  </div>
+                </>
+              )}
+            </div>
+            
+            {/* Overflow menu with logout */}
+            <div className="flex items-center">
+              <div className="relative" data-dropdown-menu>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setShowDropdown(!showDropdown)}
+                  className="flex items-center gap-2 p-2 touch-target text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                >
+                  <MoreHorizontal className="w-4 h-4" />
                 </Button>
+                {showDropdown && (
+                  <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-50">
+                    <div className="py-1">
+                      {/* Group-specific options when in a group */}
+                      {currentGroup && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setShowMessageDialog(true)
+                              setShowDropdown(false)
+                            }}
+                            className="w-full px-4 py-3 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 touch-target"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                            Send Group Message
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowDeleteDialog(true)
+                              setShowDropdown(false)
+                            }}
+                            className="w-full px-4 py-3 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 touch-target"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Delete Group
+                          </button>
+                          <div className="border-t border-slate-200 dark:border-slate-700 my-1"></div>
+                        </>
+                      )}
+                      <button
+                        onClick={() => {
+                          setShowSettingsDialog(true)
+                          setShowDropdown(false)
+                        }}
+                        className="w-full px-4 py-3 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 touch-target"
+                      >
+                        <Users className="w-4 h-4" />
+                        Settings
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowLogoutDialog(true)
+                          setShowDropdown(false)
+                        }}
+                        className="w-full px-4 py-3 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 touch-target"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        Logout
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
-          
-          {/* Mobile: Show current group below header */}
-          {currentGroup && (
-            <div className="sm:hidden mt-3 pt-3 border-t border-slate-200/50 dark:border-slate-800/50">
-              <div className="flex items-center justify-center">
-                <span className="text-sm px-3 py-1 rounded-full border-2 font-medium" style={{borderColor: currentColor, color: currentColor}}>
-                  {currentGroup.name}
-                </span>
-              </div>
-            </div>
-          )}
         </div>
       </header>
 
@@ -436,7 +604,6 @@ export default function App() {
         <main className="mobile-container mobile-padding">
           <div className="text-center mb-6 sm:mb-8">
             <h1 className="mobile-text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">Your Groups</h1>
-            <p className="mobile-text-lg text-slate-600 dark:text-slate-400">Manage your expense groups and track shared costs</p>
           </div>
           
           <div className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
@@ -654,122 +821,9 @@ export default function App() {
 
       {view === 'group' && currentGroupId && (
         <main className="mobile-container mobile-padding">
-          <div className="text-center mb-6 sm:mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <Button 
-                variant="ghost" 
-                onClick={() => { setView('home'); setCurrentGroupId(null) }}
-                className="flex items-center gap-2 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 touch-target"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span className="hidden xs:inline">Back to Groups</span>
-                <span className="xs:hidden">Back</span>
-              </Button>
-              <div className="relative">
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => setShowDropdown(!showDropdown)}
-                  className="flex items-center gap-2 p-2 touch-target"
-                >
-                  <MoreHorizontal className="w-4 h-4" />
-                </Button>
-                {showDropdown && (
-                  <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-50">
-                    <div className="py-1">
-                      <button
-                        onClick={() => {
-                          setShowMessageDialog(true)
-                          setShowDropdown(false)
-                        }}
-                        className="w-full px-4 py-3 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 touch-target"
-                      >
-                        <MessageSquare className="w-4 h-4" />
-                        Send Group Message
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowDeleteDialog(true)
-                          setShowDropdown(false)
-                        }}
-                        className="w-full px-4 py-3 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 touch-target"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Delete Group
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-            <h1 className="mobile-text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">{currentGroup?.name}</h1>
-          </div>
           
           <div className="space-y-6 lg:grid lg:grid-cols-3 lg:gap-6 lg:space-y-0">
             <div className="lg:col-span-2 space-y-6">
-              <Card className="mobile-card border-0 shadow-lg">
-                <CardHeader className="pb-4">
-                  <CardTitle className="flex items-center gap-2">
-                    <DollarSign className="w-5 h-5" style={{color: currentColor}} />
-                    Add Expense
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-4 sm:space-y-4 sm:grid sm:grid-cols-2 sm:gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Description</Label>
-                      <Input 
-                        placeholder="e.g., Dinner at restaurant" 
-                        value={expenseDesc} 
-                        onChange={e=>setExpenseDesc(e.target.value)}
-                        className="mobile-input"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Amount</Label>
-                      <Input 
-                        placeholder="0.00" 
-                        type="number" 
-                        min="0" 
-                        step="0.01" 
-                        value={expenseAmount} 
-                        onChange={e=>setExpenseAmount(e.target.value)}
-                        className="mobile-input"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Paid by</Label>
-                    <Select value={payer} onValueChange={setPayer}>
-                      <SelectTrigger className="mobile-input">
-                        <SelectValue placeholder="Select who paid" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {members.map(m=> (
-                          <SelectItem key={m.id} value={m.phone}>
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold">
-                                {m.name.charAt(0).toUpperCase()}
-                              </div>
-                              {m.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button 
-                    onClick={addExpense} 
-                    disabled={members.length===0}
-                    className="mobile-button w-full"
-                    style={{background: `linear-gradient(135deg, ${currentColor}, ${currentColor}dd)`}}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Expense
-                  </Button>
-                </CardContent>
-              </Card>
-              
               <Card className="mobile-card border-0 shadow-lg">
                 <CardHeader>
                   <CardTitle>Recent Expenses</CardTitle>
@@ -780,7 +834,14 @@ export default function App() {
                       <div className="text-center py-8 sm:py-12">
                         <DollarSign className="w-10 h-10 sm:w-12 sm:h-12 text-slate-400 mx-auto mb-4" />
                         <h3 className="mobile-text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">No expenses yet</h3>
-                        <p className="mobile-text-lg text-slate-600 dark:text-slate-400">Add your first expense to get started</p>
+                        <p className="mobile-text-lg text-slate-600 dark:text-slate-400 mb-6">Add your first expense to get started</p>
+                        <Button 
+                          onClick={() => setShowAddExpenseForm(true)}
+                          className="mobile-button bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Add Your First Expense
+                        </Button>
                       </div>
                     ) : (
                       [...expenses].reverse().map(e=>{
@@ -800,7 +861,7 @@ export default function App() {
                               <span className="text-base sm:text-lg font-bold" style={{color: currentColor}}>
                                 ${(e.amountCents/100).toFixed(2)}
                               </span>
-                              <Button variant="ghost" size="sm" onClick={()=>removeExpense(e.id)} className="text-slate-400 hover:text-red-500 touch-target p-1">
+                              <Button variant="ghost" size="sm" onClick={()=>removeExpense(e)} className="text-slate-400 hover:text-red-500 touch-target p-1">
                                 ×
                               </Button>
                             </div>
@@ -816,9 +877,19 @@ export default function App() {
             <div className="space-y-4 sm:space-y-6">
               <Card className="mobile-card border-0 shadow-lg">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="w-5 h-5" style={{color: currentColor}} />
-                    Balances
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-5 h-5" style={{color: currentColor}} />
+                      Members
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => setShowAddMemberForm(true)}
+                      className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -836,8 +907,18 @@ export default function App() {
                             <div className="text-xs text-slate-500 truncate">{m.phone}</div>
                           </div>
                         </div>
-                        <div className={`font-semibold flex-shrink-0 ${pos? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                          {pos ? '+' : ''}${(amt/100).toFixed(2)}
+                        <div className="flex items-center gap-2">
+                          <div className={`font-semibold flex-shrink-0 ${pos? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {pos ? '+' : ''}${(amt/100).toFixed(2)}
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => removeMemberFromGroup(m)}
+                            className="text-slate-400 hover:text-red-500 p-1"
+                          >
+                            ×
+                          </Button>
                         </div>
                       </div>
                     )
@@ -865,6 +946,10 @@ export default function App() {
                       settlements.map((t,i)=>{
                         const from = members.find(m=>m.phone===t.from)?.name ?? t.from
                         const to = members.find(m=>m.phone===t.to)?.name ?? t.to
+                        const toUser = state.users.find(u => u.phone === t.to)
+                        const isCurrentUserOwing = t.from === me?.phone
+                        const hasVenmoUsername = toUser?.venmo
+                        
                         return (
                           <div key={i} className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
                             <div className="flex items-center justify-between mb-2">
@@ -879,14 +964,26 @@ export default function App() {
                                 <span className="font-bold text-slate-900 dark:text-slate-100">${(t.amount/100).toFixed(2)}</span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm text-slate-600 dark:text-slate-400">to</span>
+                            <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold">
-                                  {to.charAt(0).toUpperCase()}
+                                <span className="text-sm text-slate-600 dark:text-slate-400">to</span>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold">
+                                    {to.charAt(0).toUpperCase()}
+                                  </div>
+                                  <span className="font-medium text-slate-900 dark:text-slate-100 text-sm">{to}</span>
                                 </div>
-                                <span className="font-medium text-slate-900 dark:text-slate-100 text-sm">{to}</span>
                               </div>
+                              {isCurrentUserOwing && hasVenmoUsername && (
+                                <a
+                                  href={generateVenmoLink(toUser!.venmo!, t.amount/100, `Payment to ${to} from ${from}`)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-3 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+                                >
+                                  Pay with Venmo
+                                </a>
+                              )}
                             </div>
                           </div>
                         )
@@ -897,6 +994,15 @@ export default function App() {
               </Card>
             </div>
           </div>
+          
+          {/* Floating Add Button */}
+          <Button
+            onClick={() => setShowAddExpenseForm(true)}
+            className="fixed bottom-6 right-6 w-14 h-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 z-50"
+            style={{background: `linear-gradient(135deg, ${currentColor}, ${currentColor}dd)`}}
+          >
+            <Plus className="w-6 h-6" />
+          </Button>
         </main>
       )}
 
@@ -977,6 +1083,292 @@ export default function App() {
             >
               <MessageSquare className="w-4 h-4 mr-2" />
               Send Message
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Expense Modal */}
+      <Dialog open={showAddExpenseForm} onOpenChange={setShowAddExpenseForm}>
+        <DialogContent className="w-full max-w-sm sm:max-w-md mx-3 sm:mx-4 sm:max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-slate-100 mobile-text-lg">
+              <DollarSign className="w-5 h-5" style={{color: currentColor}} />
+              Add Expense
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-4 sm:space-y-4 sm:grid sm:grid-cols-2 sm:gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Description</Label>
+                <Input 
+                  placeholder="e.g., Dinner at restaurant" 
+                  value={expenseDesc} 
+                  onChange={e=>setExpenseDesc(e.target.value)}
+                  className="mobile-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Amount</Label>
+                <Input 
+                  placeholder="0.00" 
+                  type="number" 
+                  min="0" 
+                  step="0.01" 
+                  value={expenseAmount} 
+                  onChange={e=>setExpenseAmount(e.target.value)}
+                  className="mobile-input"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Paid by</Label>
+              <Select value={payer} onValueChange={setPayer}>
+                <SelectTrigger className="mobile-input">
+                  <SelectValue placeholder="Select who paid" />
+                </SelectTrigger>
+                <SelectContent>
+                  {members.map(m=> (
+                    <SelectItem key={m.id} value={m.phone}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold">
+                          {m.name.charAt(0).toUpperCase()}
+                        </div>
+                        {m.name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 flex-col sm:flex-row">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowAddExpenseForm(false)}
+              className="mobile-button flex-1 order-2 sm:order-1"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                addExpense()
+                setShowAddExpenseForm(false)
+              }}
+              disabled={members.length===0}
+              className="mobile-button flex-1 order-1 sm:order-2"
+              style={{background: `linear-gradient(135deg, ${currentColor}, ${currentColor}dd)`}}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Expense
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Member Modal */}
+      <Dialog open={showAddMemberForm} onOpenChange={setShowAddMemberForm}>
+        <DialogContent className="w-full max-w-sm sm:max-w-md mx-3 sm:mx-4">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-slate-100 mobile-text-lg">
+              <Users className="w-5 h-5" style={{color: currentColor}} />
+              Add Member
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="mname" className="text-sm font-medium text-slate-700 dark:text-slate-300">Name</Label>
+              <Input 
+                id="mname" 
+                value={memberName} 
+                onChange={e=>setMemberName(e.target.value)} 
+                placeholder="Friend's name" 
+                className="mobile-input"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="mphone" className="text-sm font-medium text-slate-700 dark:text-slate-300">Phone</Label>
+              <Input 
+                id="mphone" 
+                value={memberPhone} 
+                onChange={e=>setMemberPhone(e.target.value)} 
+                placeholder="+1 (555) 123-4567" 
+                className="mobile-input"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 flex-col sm:flex-row">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowAddMemberForm(false)}
+              className="mobile-button flex-1 order-2 sm:order-1"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={addMemberToGroup}
+              className="mobile-button flex-1 order-1 sm:order-2"
+              style={{background: `linear-gradient(135deg, ${currentColor}, ${currentColor}dd)`}}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Member
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Member Delete Confirmation Dialog */}
+      <Dialog open={showMemberDeleteDialog} onOpenChange={setShowMemberDeleteDialog}>
+        <DialogContent className="w-full max-w-sm sm:max-w-md mx-3 sm:mx-4">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400 mobile-text-lg">
+              <Trash2 className="w-5 h-5" />
+              Remove Member
+            </DialogTitle>
+            <DialogDescription className="text-slate-600 dark:text-slate-400 mobile-text-lg">
+              Are you sure you want to remove "{memberToDelete?.name}" from this group? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 flex-col sm:flex-row">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowMemberDeleteDialog(false)}
+              className="mobile-button flex-1 order-2 sm:order-1"
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={confirmRemoveMember}
+              className="mobile-button flex-1 order-1 sm:order-2"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Remove Member
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Expense Delete Confirmation Dialog */}
+      <Dialog open={showExpenseDeleteDialog} onOpenChange={setShowExpenseDeleteDialog}>
+        <DialogContent className="w-full max-w-sm sm:max-w-md mx-3 sm:mx-4">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400 mobile-text-lg">
+              <Trash2 className="w-5 h-5" />
+              Delete Expense
+            </DialogTitle>
+            <DialogDescription className="text-slate-600 dark:text-slate-400 mobile-text-lg">
+              Are you sure you want to delete "{expenseToDelete?.description}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 flex-col sm:flex-row">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowExpenseDeleteDialog(false)}
+              className="mobile-button flex-1 order-2 sm:order-1"
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={confirmRemoveExpense}
+              className="mobile-button flex-1 order-1 sm:order-2"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Expense
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Settings Dialog */}
+      <Dialog open={showSettingsDialog} onOpenChange={setShowSettingsDialog}>
+        <DialogContent className="w-full max-w-sm sm:max-w-md mx-3 sm:mx-4">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-slate-100 mobile-text-lg">
+              <Users className="w-5 h-5" />
+              Settings
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Your Name</Label>
+              <Input 
+                value={me?.name || ''} 
+                className="mobile-input"
+                disabled
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Phone Number</Label>
+              <Input 
+                value={me?.phone || ''} 
+                className="mobile-input"
+                disabled
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Venmo Account</Label>
+              <Input 
+                placeholder="Enter your Venmo username" 
+                value={venmoUsername}
+                onChange={(e) => setVenmoUsername(e.target.value)}
+                className="mobile-input"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Password</Label>
+              <Input 
+                type="password"
+                placeholder="Enter new password" 
+                className="mobile-input"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 flex-col sm:flex-row">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowSettingsDialog(false)}
+              className="mobile-button flex-1 order-2 sm:order-1"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={saveSettings}
+              className="mobile-button flex-1 order-1 sm:order-2"
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Logout Confirmation Dialog */}
+      <Dialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
+        <DialogContent className="w-full max-w-sm sm:max-w-md mx-3 sm:mx-4">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-slate-100 mobile-text-lg">
+              <LogOut className="w-5 h-5" />
+              Logout
+            </DialogTitle>
+            <DialogDescription className="text-slate-600 dark:text-slate-400 mobile-text-lg">
+              Are you sure you want to logout? You'll need to sign in again to access your groups.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 flex-col sm:flex-row">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowLogoutDialog(false)}
+              className="mobile-button flex-1 order-2 sm:order-1"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={logout}
+              className="mobile-button flex-1 order-1 sm:order-2"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Logout
             </Button>
           </DialogFooter>
         </DialogContent>

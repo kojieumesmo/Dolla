@@ -29,6 +29,14 @@
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
+    
+    /* Theme-aware colors with automatic contrast */
+    --theme-primary: 200 100% 50%;
+    --theme-primary-foreground: 0 0% 100%;
+    --theme-secondary: 200 100% 50%;
+    --theme-secondary-foreground: 0 0% 100%;
+    --theme-accent: 200 100% 50%;
+    --theme-accent-foreground: 0 0% 100%;
   }
   .dark {
     --background: 0 0% 3.9%;
@@ -55,6 +63,14 @@
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+    
+    /* Theme-aware colors with automatic contrast */
+    --theme-primary: 200 100% 50%;
+    --theme-primary-foreground: 0 0% 100%;
+    --theme-secondary: 200 100% 50%;
+    --theme-secondary-foreground: 0 0% 100%;
+    --theme-accent: 200 100% 50%;
+    --theme-accent-foreground: 0 0% 100%;
   }
 }
 
@@ -118,5 +134,47 @@
   /* Mobile-friendly inputs */
   .mobile-input {
     @apply h-12 px-4 text-base rounded-lg border border-slate-300 dark:border-slate-700;
+  }
+  
+  /* Theme-aware colors with automatic contrast */
+  .theme-primary {
+    background-color: hsl(var(--theme-primary));
+    color: hsl(var(--theme-primary-foreground));
+  }
+  
+  .theme-primary-text {
+    color: hsl(var(--theme-primary));
+  }
+  
+  .theme-primary-bg {
+    background-color: hsl(var(--theme-primary));
+  }
+  
+  .theme-primary-border {
+    border-color: hsl(var(--theme-primary));
+  }
+  
+  /* Avatar utilities with proper contrast */
+  .avatar-gradient {
+    background: linear-gradient(135deg, hsl(var(--theme-primary)), hsl(var(--theme-primary) / 0.8));
+    color: hsl(var(--theme-primary-foreground));
+  }
+  
+  .avatar-solid {
+    background-color: hsl(var(--theme-primary));
+    color: hsl(var(--theme-primary-foreground));
+  }
+  
+  /* Automatic contrast text utilities */
+  .text-auto {
+    color: hsl(var(--foreground));
+  }
+  
+  .text-auto-muted {
+    color: hsl(var(--muted-foreground));
+  }
+  
+  .text-auto-secondary {
+    color: hsl(var(--secondary-foreground));
   }
 }
