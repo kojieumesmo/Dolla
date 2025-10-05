@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Plus, Users, DollarSign, ArrowLeft, LogOut, Sparkles, Trash2, MessageSquare, MoreHorizontal } from 'lucide-react'
+import { setThemeColors, getAvatarClasses, getThemeButtonClasses } from '@/lib/utils'
 
 type User = { id: string; phone: string; name: string; venmo?: string }
 type Group = { id: string; name: string; themeColor?: string; theme?: 'shadcn' | 'tweakcn' }
@@ -449,6 +450,13 @@ export default function App() {
     return '#38bdf8'
   }
 
+  // Set theme colors when current group changes
+  useEffect(() => {
+    if (currentGroup) {
+      setThemeColors(resolveColor(currentGroup))
+    }
+  }, [currentGroup])
+
   if (!me) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center w-full">
@@ -629,8 +637,8 @@ export default function App() {
                   <CardContent className="p-4 sm:p-6">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                        <div className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex-shrink-0" style={{backgroundColor: resolveColor(g) + '20'}}>
-                          <span className="text-base sm:text-lg font-bold" style={{color: resolveColor(g)}}>
+                        <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex-shrink-0 flex items-center justify-center ${getAvatarClasses(resolveColor(g))}`}>
+                          <span className="text-base sm:text-lg font-bold">
                             {g.name.charAt(0).toUpperCase()}
                           </span>
                         </div>
@@ -772,7 +780,7 @@ export default function App() {
                     <div className="space-y-2">
                       {(state.membersByGroupId[currentGroupId!]||[]).map(m => (
                         <div key={m.id} className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${getAvatarClasses(groupColor)}`}>
                             {m.name.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0 flex-1">
