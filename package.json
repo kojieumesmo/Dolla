@@ -1,0 +1,21 @@
+{
+  "name": "dolla-sms-server",
+  "version": "1.0.0",
+  "description": "SMS Mock Server for Dolla expense splitting app",
+  "main": "sms-server.js",
+  "scripts": {
+    "start": "node sms-server.js",
+    "dev": "nodemon sms-server.js",
+    "sms": "node sms-mock.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": ["sms", "mock", "dolla", "expense-splitting"],
+  "author": "Dolla Team",
+  "license": "MIT"
+}
