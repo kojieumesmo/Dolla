@@ -28,8 +28,10 @@ function loadSMSLog() {
 function saveSMSLog(log) {
   try {
     fs.writeFileSync(SMS_LOG_FILE, JSON.stringify(log, null, 2));
+    return true;
   } catch (error) {
     console.error('Error saving SMS log:', error.message);
+    throw new Error(`Failed to save SMS log: ${error.message}`);
   }
 }
 
@@ -59,14 +61,18 @@ function sendSMS(phone, message) {
   };
   
   log.push(sms);
-  saveSMSLog(log);
   
-  console.log(`📱 SMS sent to ${formatPhone(phone)}:`);
-  console.log(`   ${message}`);
-  console.log(`   [${sms.timestamp}]`);
-  console.log('');
-  
-  return sms;
+  try {
+    saveSMSLog(log);
+    console.log(`📱 SMS sent to ${formatPhone(phone)}:`);
+    console.log(`   ${message}`);
+    console.log(`   [${sms.timestamp}]`);
+    console.log('');
+    return sms;
+  } catch (error) {
+    console.error('Failed to persist SMS:', error.message);
+    throw error;
+  }
 }
 
 // Generate group details SMS
