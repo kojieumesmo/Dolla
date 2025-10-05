@@ -145,7 +145,7 @@ export default function App() {
   const [expenseAmount, setExpenseAmount] = useState('')
   const [payer, setPayer] = useState<string | undefined>(undefined)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  useEffect(() => { setPayer(members[0]?.phone) }, [members.length])
+  useEffect(() => { setPayer(members[0]?.phone) }, [members])
 
   const addExpense = () => {
     if (!currentGroupId) return

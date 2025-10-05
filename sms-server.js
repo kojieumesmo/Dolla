@@ -9,7 +9,13 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+// Configure CORS to only allow requests from the frontend app
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  optionsSuccessStatus: 200,
+  credentials: true
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Load app data from localStorage simulation
