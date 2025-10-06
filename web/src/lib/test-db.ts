@@ -1,9 +1,9 @@
 // Test database connection
-import { supabase } from './supabase'
-import { createUser } from './database'
-
 export async function testDatabaseConnection() {
   try {
+    // Dynamic import to avoid module-level issues
+    const { supabase } = await import('./supabase')
+    
     const { error } = await supabase
       .from('users')
       .select('count')
@@ -25,6 +25,9 @@ export async function testDatabaseConnection() {
 // Test creating a user
 export async function testCreateUser() {
   try {
+    // Dynamic import to avoid module-level issues
+    const { createUser } = await import('./database')
+    
     const testUser = await createUser('+1234567890', 'Test User')
     console.log('✅ User created:', testUser)
     return testUser
