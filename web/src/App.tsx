@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import './App.css'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -125,6 +125,7 @@ export default function App() {
   const [me, setMe] = useState<User | null>(loadSession())
   const [currentGroupId, setCurrentGroupId] = useState<string | null>(null)
   const [view, setView] = useState<'home'|'wizard'|'group'>('home')
+  const lastCheckedGroupId = useRef<string | null>(null)
 
   useEffect(() => { saveState(state) }, [state])
   useEffect(() => { saveSession(me) }, [me])
@@ -136,9 +137,11 @@ export default function App() {
   }, [state.groups, state.membersByGroupId, me])
 
   useEffect(() => {
-    if (view === 'group') {
-      if (currentGroupId && !myGroups.find(g=>g.id===currentGroupId)) {
-        setCurrentGroupId(null); setView('home')
+    if (view === 'group' && currentGroupId && currentGroupId !== lastCheckedGroupId.current) {
+      lastCheckedGroupId.current = currentGroupId
+      if (!myGroups.find(g=>g.id===currentGroupId)) {
+        setCurrentGroupId(null)
+        setView('home')
       }
     }
   }, [myGroups, currentGroupId, view])
