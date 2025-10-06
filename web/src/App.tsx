@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Plus, Users, DollarSign, ArrowLeft, LogOut, Sparkles, Trash2, MessageSquare, MoreHorizontal } from 'lucide-react'
 import { setThemeColors, getAvatarClasses } from '@/lib/utils'
+import DatabaseTest from './DatabaseTest'
 
 type User = { id: string; phone: string; name: string; venmo?: string }
 type Group = { id: string; name: string; themeColor?: string; theme?: 'shadcn' | 'tweakcn' }
@@ -120,10 +121,28 @@ async function notifyNonMembers(groupId: string, type: 'expense-added' | 'settle
 }
 
 export default function App() {
+  const [showDatabaseTest, setShowDatabaseTest] = useState(true) // Set to false to show main app
   const [state, setState] = useState(loadState())
   const [me, setMe] = useState<User | null>(loadSession())
   const [currentGroupId, setCurrentGroupId] = useState<string | null>(null)
   const [view, setView] = useState<'home'|'wizard'|'group'>('home')
+
+  // Show database test page
+  if (showDatabaseTest) {
+    return (
+      <div>
+        <div style={{ padding: '10px', backgroundColor: '#f0f0f0', borderBottom: '1px solid #ccc' }}>
+          <button 
+            onClick={() => setShowDatabaseTest(false)}
+            style={{ padding: '5px 10px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}
+          >
+            ← Back to Main App
+          </button>
+        </div>
+        <DatabaseTest />
+      </div>
+    )
+  }
 
   useEffect(() => { saveState(state) }, [state])
   useEffect(() => { saveSession(me) }, [me])
