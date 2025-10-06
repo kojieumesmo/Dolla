@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Plus, Users, DollarSign, ArrowLeft, LogOut, Sparkles, Trash2, MessageSquare, MoreHorizontal } from 'lucide-react'
 import { setThemeColors, getAvatarClasses } from '@/lib/utils'
-import DatabaseTest from './DatabaseTest'
+// DatabaseTest will be imported dynamically
 
 type User = { id: string; phone: string; name: string; venmo?: string }
 type Group = { id: string; name: string; themeColor?: string; theme?: 'shadcn' | 'tweakcn' }
@@ -122,13 +122,26 @@ async function notifyNonMembers(groupId: string, type: 'expense-added' | 'settle
 
 export default function App() {
   const [showDatabaseTest, setShowDatabaseTest] = useState(false) // Set to true to show test page
+  const [DatabaseTestComponent, setDatabaseTestComponent] = useState<React.ComponentType | null>(null)
   const [state, setState] = useState(loadState())
   const [me, setMe] = useState<User | null>(loadSession())
   const [currentGroupId, setCurrentGroupId] = useState<string | null>(null)
   const [view, setView] = useState<'home'|'wizard'|'group'>('home')
 
+  // Load DatabaseTest component dynamically when needed
+  useEffect(() => {
+    if (showDatabaseTest && !DatabaseTestComponent) {
+      import('./DatabaseTest').then(module => {
+        setDatabaseTestComponent(() => module.default)
+      }).catch(err => {
+        console.error('Failed to load DatabaseTest component:', err)
+        setShowDatabaseTest(false)
+      })
+    }
+  }, [showDatabaseTest, DatabaseTestComponent])
+
   // Show database test page
-  if (showDatabaseTest) {
+  if (showDatabaseTest && DatabaseTestComponent) {
     return (
       <div>
         <div style={{ padding: '10px', backgroundColor: '#f0f0f0', borderBottom: '1px solid #ccc' }}>
@@ -139,7 +152,7 @@ export default function App() {
             ← Back to Main App
           </button>
         </div>
-        <DatabaseTest />
+        <DatabaseTestComponent />
       </div>
     )
   }
