@@ -121,41 +121,10 @@ async function notifyNonMembers(groupId: string, type: 'expense-added' | 'settle
 }
 
 export default function App() {
-  const [showDatabaseTest, setShowDatabaseTest] = useState(false) // Set to true to show test page
-  const [DatabaseTestComponent, setDatabaseTestComponent] = useState<React.ComponentType | null>(null)
   const [state, setState] = useState(loadState())
   const [me, setMe] = useState<User | null>(loadSession())
   const [currentGroupId, setCurrentGroupId] = useState<string | null>(null)
   const [view, setView] = useState<'home'|'wizard'|'group'>('home')
-
-  // Load DatabaseTest component dynamically when needed
-  useEffect(() => {
-    if (showDatabaseTest && !DatabaseTestComponent) {
-      import('./DatabaseTest').then(module => {
-        setDatabaseTestComponent(() => module.default)
-      }).catch(err => {
-        console.error('Failed to load DatabaseTest component:', err)
-        setShowDatabaseTest(false)
-      })
-    }
-  }, [showDatabaseTest, DatabaseTestComponent])
-
-  // Show database test page
-  if (showDatabaseTest && DatabaseTestComponent) {
-    return (
-      <div>
-        <div style={{ padding: '10px', backgroundColor: '#f0f0f0', borderBottom: '1px solid #ccc' }}>
-          <button 
-            onClick={() => setShowDatabaseTest(false)}
-            style={{ padding: '5px 10px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px' }}
-          >
-            ← Back to Main App
-          </button>
-        </div>
-        <DatabaseTestComponent />
-      </div>
-    )
-  }
 
   useEffect(() => { saveState(state) }, [state])
   useEffect(() => { saveSession(me) }, [me])
@@ -571,15 +540,15 @@ export default function App() {
               )}
             </div>
             
-            {/* Database Test Button */}
-            <Button 
+            {/* Database Test Button - Temporarily disabled */}
+            {/* <Button 
               variant="outline" 
               size="sm"
               onClick={() => setShowDatabaseTest(true)}
               className="mr-2 text-xs"
             >
               🧪 DB Test
-            </Button>
+            </Button> */}
             
             {/* Overflow menu with logout */}
             <div className="flex items-center">
