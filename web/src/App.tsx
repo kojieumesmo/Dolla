@@ -121,7 +121,7 @@ async function notifyNonMembers(groupId: string, type: 'expense-added' | 'settle
 }
 
 export default function App() {
-  const [showDatabaseTest, setShowDatabaseTest] = useState(true) // Set to false to show main app
+  const [showDatabaseTest, setShowDatabaseTest] = useState(false) // Set to true to show test page
   const [state, setState] = useState(loadState())
   const [me, setMe] = useState<User | null>(loadSession())
   const [currentGroupId, setCurrentGroupId] = useState<string | null>(null)
@@ -557,6 +557,16 @@ export default function App() {
                 </>
               )}
             </div>
+            
+            {/* Database Test Button */}
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowDatabaseTest(true)}
+              className="mr-2 text-xs"
+            >
+              🧪 DB Test
+            </Button>
             
             {/* Overflow menu with logout */}
             <div className="flex items-center">
