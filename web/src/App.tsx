@@ -127,6 +127,35 @@ export default function App() {
   const [view, setView] = useState<'home'|'wizard'|'group'>('home')
   const lastCheckedGroupId = useRef<string | null>(null)
 
+  // Auth minimal (mock OTP)
+  const [authName, setAuthName] = useState('')
+  const [authPhone, setAuthPhone] = useState('')
+
+  // Wizard state
+  const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [groupName, setGroupName] = useState('')
+  const [groupColor, setGroupColor] = useState<string>('#38bdf8')
+  const [memberName, setMemberName] = useState('')
+  const [memberPhone, setMemberPhone] = useState('')
+
+  // Expenses screen
+  const [expenseDesc, setExpenseDesc] = useState('')
+  const [expenseAmount, setExpenseAmount] = useState('')
+  const [payer, setPayer] = useState<string | undefined>(undefined)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showMessageDialog, setShowMessageDialog] = useState(false)
+  const [groupMessage, setGroupMessage] = useState('')
+  const [showDropdown, setShowDropdown] = useState(false)
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false)
+  const [showAddExpenseForm, setShowAddExpenseForm] = useState(false)
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false)
+  const [showMemberDeleteDialog, setShowMemberDeleteDialog] = useState(false)
+  const [memberToDelete, setMemberToDelete] = useState<Member | null>(null)
+  const [showAddMemberForm, setShowAddMemberForm] = useState(false)
+  const [showExpenseDeleteDialog, setShowExpenseDeleteDialog] = useState(false)
+  const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null)
+  const [venmoUsername, setVenmoUsername] = useState('')
+
   useEffect(() => { saveState(state) }, [state])
   useEffect(() => { saveSession(me) }, [me])
 
@@ -146,9 +175,6 @@ export default function App() {
     }
   }, [myGroups, currentGroupId, view])
 
-  // Auth minimal (mock OTP)
-  const [authName, setAuthName] = useState('')
-  const [authPhone, setAuthPhone] = useState('')
   const onAuth = () => {
     const phone = normalizePhone(authPhone)
     if (!authName.trim() || !isValidPhone(phone)) return alert('Enter a name and valid phone')
@@ -159,13 +185,6 @@ export default function App() {
     }
     setMe(user)
   }
-
-  // Wizard state
-  const [step, setStep] = useState<1 | 2 | 3>(1)
-  const [groupName, setGroupName] = useState('')
-  const [groupColor, setGroupColor] = useState<string>('#38bdf8')
-  const [memberName, setMemberName] = useState('')
-  const [memberPhone, setMemberPhone] = useState('')
 
   const startWizard = () => { setView('wizard'); setStep(1); setGroupName(''); setGroupColor('#38bdf8'); setMemberName(''); setMemberPhone('') }
   const createGroup = () => {
@@ -233,25 +252,9 @@ export default function App() {
     setMemberName(''); setMemberPhone('')
   }
 
-  // Expenses screen
   const members = useMemo<Member[]>(() => currentGroupId ? (state.membersByGroupId[currentGroupId] || []) : [], [state.membersByGroupId, currentGroupId])
   const expenses = useMemo<Expense[]>(() => currentGroupId ? (state.expensesByGroupId[currentGroupId] || []) : [], [state.expensesByGroupId, currentGroupId])
-  const [expenseDesc, setExpenseDesc] = useState('')
-  const [expenseAmount, setExpenseAmount] = useState('')
-  const [payer, setPayer] = useState<string | undefined>(undefined)
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [showMessageDialog, setShowMessageDialog] = useState(false)
-  const [groupMessage, setGroupMessage] = useState('')
-  const [showDropdown, setShowDropdown] = useState(false)
-  const [showLogoutDialog, setShowLogoutDialog] = useState(false)
-  const [showAddExpenseForm, setShowAddExpenseForm] = useState(false)
-  const [showSettingsDialog, setShowSettingsDialog] = useState(false)
-  const [showMemberDeleteDialog, setShowMemberDeleteDialog] = useState(false)
-  const [memberToDelete, setMemberToDelete] = useState<Member | null>(null)
-  const [showAddMemberForm, setShowAddMemberForm] = useState(false)
-  const [showExpenseDeleteDialog, setShowExpenseDeleteDialog] = useState(false)
-  const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null)
-  const [venmoUsername, setVenmoUsername] = useState('')
+  
   useEffect(() => { setPayer(members[0]?.phone) }, [members])
   
   // Load venmo username when settings dialog opens
@@ -454,6 +457,18 @@ export default function App() {
     return '#38bdf8'
   }
 
+  // Current group
+  const currentGroup = currentGroupId ? state.groups.find(g=>g.id===currentGroupId) || null : null
+  const currentColor = resolveColor(currentGroup)
+
+  // Set theme colors when current group changes
+  useEffect(() => {
+    if (currentGroup) {
+      setThemeColors(resolveColor(currentGroup))
+    }
+  }, [currentGroup])
+
+  // Early return for unauthenticated users - must be after all hooks
   if (!me) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center w-full">
@@ -487,10 +502,7 @@ export default function App() {
                   className="mobile-input"
                 />
               </div>
-              <Button 
-                className="mobile-button w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700" 
-                onClick={onAuth}
-              >
+              <Button onClick={onAuth} className="mobile-button w-full">
                 Get Started
               </Button>
             </CardContent>
@@ -499,17 +511,6 @@ export default function App() {
       </div>
     )
   }
-
-  // Current group
-  const currentGroup = currentGroupId ? state.groups.find(g=>g.id===currentGroupId) || null : null
-  const currentColor = resolveColor(currentGroup)
-
-  // Set theme colors when current group changes
-  useEffect(() => {
-    if (currentGroup) {
-      setThemeColors(resolveColor(currentGroup))
-    }
-  }, [currentGroup])
 
   const logout = () => { setMe(null); setView('home'); setCurrentGroupId(null); setShowLogoutDialog(false) }
   const goHome = () => { setView('home'); setCurrentGroupId(null) }
