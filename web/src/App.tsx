@@ -130,15 +130,12 @@ async function notifyNonMembers(groupId: string, type: 'expense-added' | 'settle
     const lastNotified = nonMember.lastNotifiedAt || 0
     if (now - lastNotified < 5 * 60 * 1000) continue
     
-    let smsType: 'group-invitation' | 'new-expense' | 'settlement-update'
     let message: string
     
     if (type === 'expense-added') {
-      smsType = 'new-expense'
       message = generateSMSMessage('new-expense', groupName, expenseDetails)
       await sendSMS('new-expense', nonMember.phone, groupId, expenseId)
     } else if (type === 'settlement-changed') {
-      smsType = 'settlement-update'
       message = generateSMSMessage('settlement-update', groupName)
       await sendSMS('settlement-update', nonMember.phone, groupId)
     } else {
