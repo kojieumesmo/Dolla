@@ -1200,7 +1200,7 @@ export default function App() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent className="w-full max-w-sm sm:max-w-md mx-3 sm:mx-4">
+        <DialogContent className="w-full h-full max-w-none max-h-none m-0 rounded-none sm:w-auto sm:h-auto sm:max-w-md sm:max-h-[90vh] sm:m-4 sm:rounded-lg sm:mx-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400 mobile-text-lg">
               <Trash2 className="w-5 h-5" />
@@ -1232,7 +1232,7 @@ export default function App() {
 
       {/* Send Group Message Dialog */}
       <Dialog open={showMessageDialog} onOpenChange={setShowMessageDialog}>
-        <DialogContent className="w-full max-w-sm sm:max-w-md mx-3 sm:mx-4">
+        <DialogContent className="w-full h-full max-w-none max-h-none m-0 rounded-none sm:w-auto sm:h-auto sm:max-w-md sm:max-h-[90vh] sm:m-4 sm:rounded-lg sm:mx-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-blue-600 dark:text-blue-400 mobile-text-lg">
               <MessageSquare className="w-5 h-5" />
@@ -1282,7 +1282,7 @@ export default function App() {
 
       {/* Add Expense Modal */}
       <Dialog open={showAddExpenseForm} onOpenChange={setShowAddExpenseForm}>
-        <DialogContent className="w-full max-w-sm sm:max-w-md mx-3 sm:mx-4 sm:max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-full h-full max-w-none max-h-none m-0 rounded-none sm:w-auto sm:h-auto sm:max-w-md sm:max-h-[90vh] sm:m-4 sm:rounded-lg sm:mx-auto overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-slate-100 mobile-text-lg">
               <DollarSign className="w-5 h-5" style={{color: currentColor}} />
@@ -1363,7 +1363,7 @@ export default function App() {
 
       {/* Add Member Modal */}
       <Dialog open={showAddMemberForm} onOpenChange={setShowAddMemberForm}>
-        <DialogContent className="w-full max-w-sm sm:max-w-md mx-3 sm:mx-4">
+        <DialogContent className="w-full h-full max-w-none max-h-none m-0 rounded-none sm:w-auto sm:h-auto sm:max-w-md sm:max-h-[90vh] sm:m-4 sm:rounded-lg sm:mx-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-slate-100 mobile-text-lg">
               <Users className="w-5 h-5" style={{color: currentColor}} />
@@ -1414,7 +1414,7 @@ export default function App() {
 
       {/* Member Delete Confirmation Dialog */}
       <Dialog open={showMemberDeleteDialog} onOpenChange={setShowMemberDeleteDialog}>
-        <DialogContent className="w-full max-w-sm sm:max-w-md mx-3 sm:mx-4">
+        <DialogContent className="w-full h-full max-w-none max-h-none m-0 rounded-none sm:w-auto sm:h-auto sm:max-w-md sm:max-h-[90vh] sm:m-4 sm:rounded-lg sm:mx-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400 mobile-text-lg">
               <Trash2 className="w-5 h-5" />
@@ -1446,7 +1446,7 @@ export default function App() {
 
       {/* Expense Delete Confirmation Dialog */}
       <Dialog open={showExpenseDeleteDialog} onOpenChange={setShowExpenseDeleteDialog}>
-        <DialogContent className="w-full max-w-sm sm:max-w-md mx-3 sm:mx-4">
+        <DialogContent className="w-full h-full max-w-none max-h-none m-0 rounded-none sm:w-auto sm:h-auto sm:max-w-md sm:max-h-[90vh] sm:m-4 sm:rounded-lg sm:mx-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400 mobile-text-lg">
               <Trash2 className="w-5 h-5" />
@@ -1478,7 +1478,7 @@ export default function App() {
 
       {/* Settings Dialog */}
       <Dialog open={showSettingsDialog} onOpenChange={setShowSettingsDialog}>
-        <DialogContent className="w-full max-w-sm sm:max-w-md mx-3 sm:mx-4">
+        <DialogContent className="w-full h-full max-w-none max-h-none m-0 rounded-none sm:w-auto sm:h-auto sm:max-w-md sm:max-h-[90vh] sm:m-4 sm:rounded-lg sm:mx-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-slate-100 mobile-text-lg">
               <Users className="w-5 h-5" />
@@ -1540,7 +1540,7 @@ export default function App() {
 
       {/* Logout Confirmation Dialog */}
       <Dialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
-        <DialogContent className="w-full max-w-sm sm:max-w-md mx-3 sm:mx-4">
+        <DialogContent className="w-full h-full max-w-none max-h-none m-0 rounded-none sm:w-auto sm:h-auto sm:max-w-md sm:max-h-[90vh] sm:m-4 sm:rounded-lg sm:mx-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-slate-100 mobile-text-lg">
               <LogOut className="w-5 h-5" />
