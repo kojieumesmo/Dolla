@@ -10,7 +10,7 @@ import { Plus, Users, DollarSign, ArrowLeft, LogOut, Sparkles, Trash2, MessageSq
 import { setThemeColors, getAvatarClasses } from '@/lib/utils'
 // DatabaseTest will be imported dynamically
 
-type User = { id: string; phone: string; name: string; venmo?: string }
+type User = { id: string; phone: string; name: string; venmo?: string; passwordHash?: string }
 type Group = { id: string; name: string; themeColor?: string; theme?: 'shadcn' | 'tweakcn' }
 type Member = { id: string; name: string; phone: string }
 type NonMember = { phone: string; name?: string; invitedAt: number; lastNotifiedAt?: number }
@@ -51,6 +51,22 @@ function loadSession(): User | null {
   try { const raw = localStorage.getItem(SESSION_KEY); return raw ? JSON.parse(raw) as User : null } catch { return null }
 }
 function saveSession(user: User | null) { if (user) localStorage.setItem(SESSION_KEY, JSON.stringify(user)); else localStorage.removeItem(SESSION_KEY) }
+
+// Simple password hashing (for MVP - in production use proper bcrypt)
+function hashPassword(password: string): string {
+  // Simple hash for MVP - in production use crypto.subtle or bcrypt
+  let hash = 0
+  for (let i = 0; i < password.length; i++) {
+    const char = password.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash = hash & hash // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString(36)
+}
+
+function verifyPassword(password: string, hash: string): boolean {
+  return hashPassword(password) === hash
+}
 
 function generateId(prefix: string) { return `${prefix}_${Math.random().toString(36).slice(2, 9)}_${Date.now().toString(36)}` }
 function normalizePhone(input: string) { const d = String(input||'').trim().replace(/[^\d+]/g,''); if (d.startsWith('+')) return d; if (d.length===10) return '+1'+d; return d }
@@ -175,6 +191,8 @@ export default function App() {
   // Auth minimal (mock OTP)
   const [authName, setAuthName] = useState('')
   const [authPhone, setAuthPhone] = useState('')
+  const [authPassword, setAuthPassword] = useState('')
+  const [isLoginMode, setIsLoginMode] = useState(false)
 
   // Wizard state
   const [step, setStep] = useState<1 | 2 | 3>(1)
@@ -230,12 +248,42 @@ export default function App() {
   const onAuth = () => {
     const phone = normalizePhone(authPhone)
     if (!authName.trim() || !isValidPhone(phone)) return alert('Enter a name and valid phone')
+    
     let user = state.users.find(u => u.phone === phone)
-    if (!user) {
-      user = { id: generateId('usr'), phone, name: authName.trim() }
-      setState(prev => ({ ...prev, users: [...prev.users, user!] }))
+    
+    if (isLoginMode) {
+      // Login mode - verify password
+      if (!user) return alert('User not found. Please sign up first.')
+      if (!user.passwordHash) return alert('This user has no password set. Please sign up again.')
+      if (!authPassword.trim()) return alert('Please enter your password')
+      if (!verifyPassword(authPassword, user.passwordHash)) return alert('Incorrect password')
+      setMe(user)
+    } else {
+      // Sign up mode - create new user or update existing
+      if (!authPassword.trim()) return alert('Please enter a password')
+      
+      const passwordHash = hashPassword(authPassword)
+      
+      if (!user) {
+        // Create new user
+        user = { id: generateId('usr'), phone, name: authName.trim(), passwordHash }
+        setState(prev => ({ ...prev, users: [...prev.users, user!] }))
+      } else {
+        // Update existing user with password
+        user = { ...user, name: authName.trim(), passwordHash }
+        setState(prev => ({ 
+          ...prev, 
+          users: prev.users.map(u => u.phone === phone ? user! : u)
+        }))
+      }
+      setMe(user)
     }
-    setMe(user)
+    
+    // Clear auth form
+    setAuthName('')
+    setAuthPhone('')
+    setAuthPassword('')
+    setIsLoginMode(false)
   }
 
   const startWizard = () => { setView('wizard'); setStep(1); setGroupName(''); setGroupColor('#38bdf8'); setMemberName(''); setMemberPhone('') }
@@ -570,8 +618,12 @@ export default function App() {
             <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 mb-4">
               <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
             </div>
-            <h1 className="mobile-text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">Welcome to Dolla</h1>
-            <p className="mobile-text-lg text-slate-600 dark:text-slate-400">Split expenses effortlessly with friends</p>
+            <h1 className="mobile-text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">
+              {isLoginMode ? 'Welcome Back' : 'Welcome to Dolla'}
+            </h1>
+            <p className="mobile-text-lg text-slate-600 dark:text-slate-400">
+              {isLoginMode ? 'Login to your account' : 'Split expenses effortlessly with friends'}
+            </p>
           </div>
           <Card className="mobile-card border-0 shadow-xl">
             <CardContent className="p-4 sm:p-8 space-y-4 sm:space-y-6">
@@ -595,9 +647,29 @@ export default function App() {
                   className="mobile-input"
                 />
               </div>
-              <Button onClick={onAuth} className="mobile-button w-full">
-                Get Started
-              </Button>
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-sm font-medium text-slate-700 dark:text-slate-300">Password</Label>
+                <Input 
+                  id="password" 
+                  type="password"
+                  placeholder="Enter your password" 
+                  value={authPassword} 
+                  onChange={e=>setAuthPassword(e.target.value)}
+                  className="mobile-input"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => setIsLoginMode(!isLoginMode)} 
+                  variant="outline" 
+                  className="mobile-button flex-1"
+                >
+                  {isLoginMode ? 'Sign Up Instead' : 'Login Instead'}
+                </Button>
+                <Button onClick={onAuth} className="mobile-button flex-1">
+                  {isLoginMode ? 'Login' : 'Sign Up'}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
