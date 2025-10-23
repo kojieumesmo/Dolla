@@ -192,7 +192,7 @@ export default function App() {
   const [authName, setAuthName] = useState('')
   const [authPhone, setAuthPhone] = useState('')
   const [authPassword, setAuthPassword] = useState('')
-  const [isLoginMode, setIsLoginMode] = useState(false)
+  const [showSignupForm, setShowSignupForm] = useState(false)
 
   // Wizard state
   const [step, setStep] = useState<1 | 2 | 3>(1)
@@ -245,45 +245,40 @@ export default function App() {
     }
   }, [myGroups, currentGroupId, view])
 
-  const onAuth = () => {
+  const onLogin = () => {
+    const phone = normalizePhone(authPhone)
+    if (!isValidPhone(phone)) return alert('Enter a valid phone number')
+    if (!authPassword.trim()) return alert('Please enter your password')
+    
+    const user = state.users.find(u => u.phone === phone)
+    if (!user) return alert('User not found. Please sign up first.')
+    if (!user.passwordHash) return alert('This user has no password set. Please sign up again.')
+    if (!verifyPassword(authPassword, user.passwordHash)) return alert('Incorrect password')
+    
+    setMe(user)
+    // Clear auth form
+    setAuthPhone('')
+    setAuthPassword('')
+  }
+
+  const onSignup = () => {
     const phone = normalizePhone(authPhone)
     if (!authName.trim() || !isValidPhone(phone)) return alert('Enter a name and valid phone')
+    if (!authPassword.trim()) return alert('Please enter a password')
     
     let user = state.users.find(u => u.phone === phone)
+    if (user) return alert('User already exists. Please login instead.')
     
-    if (isLoginMode) {
-      // Login mode - verify password
-      if (!user) return alert('User not found. Please sign up first.')
-      if (!user.passwordHash) return alert('This user has no password set. Please sign up again.')
-      if (!authPassword.trim()) return alert('Please enter your password')
-      if (!verifyPassword(authPassword, user.passwordHash)) return alert('Incorrect password')
-      setMe(user)
-    } else {
-      // Sign up mode - create new user or update existing
-      if (!authPassword.trim()) return alert('Please enter a password')
-      
-      const passwordHash = hashPassword(authPassword)
-      
-      if (!user) {
-        // Create new user
-        user = { id: generateId('usr'), phone, name: authName.trim(), passwordHash }
-        setState(prev => ({ ...prev, users: [...prev.users, user!] }))
-      } else {
-        // Update existing user with password
-        user = { ...user, name: authName.trim(), passwordHash }
-        setState(prev => ({ 
-          ...prev, 
-          users: prev.users.map(u => u.phone === phone ? user! : u)
-        }))
-      }
-      setMe(user)
-    }
+    const passwordHash = hashPassword(authPassword)
+    user = { id: generateId('usr'), phone, name: authName.trim(), passwordHash }
+    setState(prev => ({ ...prev, users: [...prev.users, user!] }))
+    setMe(user)
     
-    // Clear auth form
+    // Clear auth form and close signup
     setAuthName('')
     setAuthPhone('')
     setAuthPassword('')
-    setIsLoginMode(false)
+    setShowSignupForm(false)
   }
 
   const startWizard = () => { setView('wizard'); setStep(1); setGroupName(''); setGroupColor('#38bdf8'); setMemberName(''); setMemberPhone('') }
@@ -619,24 +614,26 @@ export default function App() {
               <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
             </div>
             <h1 className="mobile-text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">
-              {isLoginMode ? 'Welcome Back' : 'Welcome to Dolla'}
+              {showSignupForm ? 'Join Dolla' : 'Welcome Back'}
             </h1>
             <p className="mobile-text-lg text-slate-600 dark:text-slate-400">
-              {isLoginMode ? 'Login to your account' : 'Split expenses effortlessly with friends'}
+              {showSignupForm ? 'Create your account to get started' : 'Login to your account'}
             </p>
           </div>
           <Card className="mobile-card border-0 shadow-xl">
             <CardContent className="p-4 sm:p-8 space-y-4 sm:space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="name" className="text-sm font-medium text-slate-700 dark:text-slate-300">Your name</Label>
-                <Input 
-                  id="name" 
-                  placeholder="Enter your name" 
-                  value={authName} 
-                  onChange={e=>setAuthName(e.target.value)}
-                  className="mobile-input"
-                />
-              </div>
+              {showSignupForm && (
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-sm font-medium text-slate-700 dark:text-slate-300">Your name</Label>
+                  <Input 
+                    id="name" 
+                    placeholder="Enter your name" 
+                    value={authName} 
+                    onChange={e=>setAuthName(e.target.value)}
+                    className="mobile-input"
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="phone" className="text-sm font-medium text-slate-700 dark:text-slate-300">Phone number</Label>
                 <Input 
@@ -658,17 +655,21 @@ export default function App() {
                   className="mobile-input"
                 />
               </div>
-              <div className="flex gap-2">
+              <div className="space-y-3">
                 <Button 
-                  onClick={() => setIsLoginMode(!isLoginMode)} 
-                  variant="outline" 
-                  className="mobile-button flex-1"
+                  onClick={showSignupForm ? onSignup : onLogin} 
+                  className="mobile-button w-full"
                 >
-                  {isLoginMode ? 'Sign Up Instead' : 'Login Instead'}
+                  {showSignupForm ? 'Create Account' : 'Login'}
                 </Button>
-                <Button onClick={onAuth} className="mobile-button flex-1">
-                  {isLoginMode ? 'Login' : 'Sign Up'}
-                </Button>
+                <div className="text-center">
+                  <button 
+                    onClick={() => setShowSignupForm(!showSignupForm)}
+                    className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"
+                  >
+                    {showSignupForm ? 'Already have an account? Login' : "Don't have an account? Sign up"}
+                  </button>
+                </div>
               </div>
             </CardContent>
           </Card>
