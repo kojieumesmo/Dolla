@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Plus, Users, DollarSign, ArrowLeft, LogOut, Sparkles, Trash2, MessageSquare, MoreHorizontal } from 'lucide-react'
+import { Plus, Users, DollarSign, ArrowLeft, LogOut, Sparkles, Trash2, MessageSquare, MoreHorizontal, Smartphone, X } from 'lucide-react'
 import { setThemeColors, getAvatarClasses } from '@/lib/utils'
 // DatabaseTest will be imported dynamically
 
@@ -15,6 +15,7 @@ type Group = { id: string; name: string; themeColor?: string; theme?: 'shadcn' |
 type Member = { id: string; name: string; phone: string }
 type NonMember = { phone: string; name?: string; invitedAt: number; lastNotifiedAt?: number }
 type Expense = { id: string; groupId: string; description: string; amountCents: number; payerPhone: string; participants: string[]; createdAt: number }
+type SMSToast = { id: string; phone: string; name: string; message: string; timestamp: number }
 
 const STORAGE_KEY = 'dolla.v2'
 const SESSION_KEY = 'dolla.session'
@@ -57,13 +58,13 @@ function isValidPhone(input: string) { return /^\+?\d{7,15}$/.test(normalizePhon
 
 // Generate Venmo payment link with auto-fill parameters
 function generateVenmoLink(venmoUsername: string, amount: number, note?: string): string {
-  const baseUrl = 'https://venmo.com/code'
+  const baseUrl = 'https://venmo.com'
   const params = new URLSearchParams({
-    user_id: venmoUsername,
+    txn: 'charge', // Request money from the user
     amount: amount.toString(),
     note: note || 'Payment from Dolla'
   })
-  return `${baseUrl}?${params.toString()}`
+  return `${baseUrl}/${venmoUsername}?${params.toString()}`
 }
 
 // SMS functionality - automatic notifications for non-members
@@ -85,10 +86,43 @@ async function sendSMS(type: 'group-invitation' | 'group-details' | 'new-expense
   }
 }
 
+// SMS Debugger functions
+function generateSMSMessage(type: 'group-invitation' | 'new-expense' | 'settlement-update', groupName: string, details?: any): string {
+  switch (type) {
+    case 'group-invitation':
+      return `📱 You've been invited to join "${groupName}" expense group! Download Dolla app to participate.`
+    case 'new-expense':
+      return `💰 New expense "${details?.description}" ($${(details?.amount/100).toFixed(2)}) added to "${groupName}" group.`
+    case 'settlement-update':
+      return `⚖️ Settlement updated in "${groupName}" group. Check your balance!`
+    default:
+      return `📱 Notification from "${groupName}" group.`
+  }
+}
+
+function addSMSToast(phone: string, name: string, message: string, setSmsToasts: React.Dispatch<React.SetStateAction<SMSToast[]>>) {
+  const toast: SMSToast = {
+    id: generateId('sms'),
+    phone,
+    name,
+    message,
+    timestamp: Date.now()
+  }
+  
+  setSmsToasts(prev => [...prev, toast])
+  
+  // Auto-remove toast after 5 seconds
+  setTimeout(() => {
+    setSmsToasts(prev => prev.filter(t => t.id !== toast.id))
+  }, 5000)
+}
+
 // Automatically notify non-members about group activities
-async function notifyNonMembers(groupId: string, type: 'expense-added' | 'settlement-changed', expenseId?: string) {
+async function notifyNonMembers(groupId: string, type: 'expense-added' | 'settlement-changed', expenseId?: string, setSmsToasts?: React.Dispatch<React.SetStateAction<SMSToast[]>>, expenseDetails?: any) {
   const state = loadState()
   const nonMembers = state.nonMembersByGroupId[groupId] || []
+  const group = state.groups.find(g => g.id === groupId)
+  const groupName = group?.name || 'Unknown Group'
   
   for (const nonMember of nonMembers) {
     // Don't spam - only notify if it's been more than 5 minutes since last notification
@@ -96,10 +130,24 @@ async function notifyNonMembers(groupId: string, type: 'expense-added' | 'settle
     const lastNotified = nonMember.lastNotifiedAt || 0
     if (now - lastNotified < 5 * 60 * 1000) continue
     
+    let smsType: 'group-invitation' | 'new-expense' | 'settlement-update'
+    let message: string
+    
     if (type === 'expense-added') {
+      smsType = 'new-expense'
+      message = generateSMSMessage('new-expense', groupName, expenseDetails)
       await sendSMS('new-expense', nonMember.phone, groupId, expenseId)
     } else if (type === 'settlement-changed') {
+      smsType = 'settlement-update'
+      message = generateSMSMessage('settlement-update', groupName)
       await sendSMS('settlement-update', nonMember.phone, groupId)
+    } else {
+      continue
+    }
+    
+    // Add SMS toast for debugging
+    if (setSmsToasts) {
+      addSMSToast(nonMember.phone, nonMember.name || 'Unknown', message, setSmsToasts)
     }
     
     // Update last notified timestamp
@@ -155,15 +203,22 @@ export default function App() {
   const [showExpenseDeleteDialog, setShowExpenseDeleteDialog] = useState(false)
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null)
   const [venmoUsername, setVenmoUsername] = useState('')
+  
+  // SMS Debugger state
+  const [smsToasts, setSmsToasts] = useState<SMSToast[]>([])
 
   useEffect(() => { saveState(state) }, [state])
   useEffect(() => { saveSession(me) }, [me])
 
-  // Visible groups are only those where current user is a member
+  // Visible groups are only those where current user is a member (full member OR invited member)
   const myGroups = useMemo(() => {
     if (!me) return [] as Group[]
-    return state.groups.filter(g => (state.membersByGroupId[g.id] || []).some(m => m.phone === me.phone))
-  }, [state.groups, state.membersByGroupId, me])
+    return state.groups.filter(g => {
+      const members = state.membersByGroupId[g.id] || []
+      const nonMembers = state.nonMembersByGroupId[g.id] || []
+      return members.some(m => m.phone === me.phone) || nonMembers.some(nm => nm.phone === me.phone)
+    })
+  }, [state.groups, state.membersByGroupId, state.nonMembersByGroupId, me])
 
   useEffect(() => {
     if (view === 'group' && currentGroupId && currentGroupId !== lastCheckedGroupId.current) {
@@ -243,6 +298,9 @@ export default function App() {
         const group = prev.groups.find(g => g.id === currentGroupId)
         if (group) {
           sendSMS('group-invitation', phone, currentGroupId)
+          // Add SMS toast for debugging
+          const message = generateSMSMessage('group-invitation', group.name)
+          addSMSToast(phone, name, message, setSmsToasts)
         }
         
         return newState
@@ -253,9 +311,17 @@ export default function App() {
   }
 
   const members = useMemo<Member[]>(() => currentGroupId ? (state.membersByGroupId[currentGroupId] || []) : [], [state.membersByGroupId, currentGroupId])
+  const nonMembers = useMemo<NonMember[]>(() => currentGroupId ? (state.nonMembersByGroupId[currentGroupId] || []) : [], [state.nonMembersByGroupId, currentGroupId])
   const expenses = useMemo<Expense[]>(() => currentGroupId ? (state.expensesByGroupId[currentGroupId] || []) : [], [state.expensesByGroupId, currentGroupId])
   
-  useEffect(() => { setPayer(members[0]?.phone) }, [members])
+  // Create combined list of all participants (members + non-members) for payer selection
+  const allParticipants = useMemo(() => {
+    const memberParticipants = members.map(m => ({ phone: m.phone, name: m.name, isMember: true }))
+    const nonMemberParticipants = nonMembers.map(nm => ({ phone: nm.phone, name: nm.name || 'Unknown', isMember: false }))
+    return [...memberParticipants, ...nonMemberParticipants]
+  }, [members, nonMembers])
+  
+  useEffect(() => { setPayer(allParticipants[0]?.phone) }, [allParticipants])
   
   // Load venmo username when settings dialog opens
   useEffect(() => {
@@ -286,13 +352,18 @@ export default function App() {
     if (!currentGroupId) return
     const desc = expenseDesc.trim(); const amount = Math.round(parseFloat(expenseAmount || '0') * 100)
     if (!desc || !(amount > 0) || !payer) return alert('Enter description, amount, payer')
-    const participants = members.map(m => m.phone)
+    
+    // Include both full members and invited members in expense participants
+    const memberPhones = members.map(m => m.phone)
+    const nonMemberPhones = nonMembers.map(nm => nm.phone)
+    const participants = [...memberPhones, ...nonMemberPhones]
+    
     const exp: Expense = { id: generateId('exp'), groupId: currentGroupId, description: desc, amountCents: amount, payerPhone: payer, participants, createdAt: Date.now() }
     setState(prev => ({ ...prev, expensesByGroupId: { ...prev.expensesByGroupId, [currentGroupId]: [...expenses, exp] } }))
     setExpenseDesc(''); setExpenseAmount('')
     
     // Automatically notify non-members about the new expense
-    notifyNonMembers(currentGroupId, 'expense-added', exp.id)
+    notifyNonMembers(currentGroupId, 'expense-added', exp.id, setSmsToasts, { description: desc, amount: amount })
   }
   const removeExpense = (expense: Expense) => {
     setExpenseToDelete(expense)
@@ -372,6 +443,9 @@ export default function App() {
         const group = prev.groups.find(g => g.id === currentGroupId)
         if (group) {
           sendSMS('group-invitation', phone, currentGroupId)
+          // Add SMS toast for debugging
+          const message = generateSMSMessage('group-invitation', group.name)
+          addSMSToast(phone, name, message, setSmsToasts)
         }
         
         return newState
@@ -402,6 +476,18 @@ export default function App() {
     setMemberToDelete(null)
   }
 
+  const removeNonMemberFromGroup = (nonMember: NonMember) => {
+    if (!currentGroupId) return
+    
+    setState(prev => ({
+      ...prev,
+      nonMembersByGroupId: {
+        ...prev.nonMembersByGroupId,
+        [currentGroupId]: (prev.nonMembersByGroupId[currentGroupId] || []).filter(nm => nm.phone !== nonMember.phone)
+      }
+    }))
+  }
+
   const saveSettings = () => {
     if (!me) return
     
@@ -416,7 +502,12 @@ export default function App() {
 
   const balances = useMemo(() => {
     const map: Record<string, number> = {}
+    
+    // Initialize balances for all members (full + invited)
     for (const m of members) map[m.phone] = 0
+    for (const nm of nonMembers) map[nm.phone] = 0
+    
+    // Calculate balances from expenses
     for (const e of expenses) {
       map[e.payerPhone] = (map[e.payerPhone] ?? 0) + e.amountCents
       const share = Math.floor(e.amountCents / e.participants.length)
@@ -428,7 +519,7 @@ export default function App() {
       })
     }
     return map
-  }, [members, expenses])
+  }, [members, nonMembers, expenses])
 
   const settlements = useMemo(() => {
     const debtors: { phone: string; amount: number }[] = []
@@ -447,6 +538,11 @@ export default function App() {
     }
     return tx
   }, [balances])
+
+  // Check if there are expenses but no settlements needed
+  const hasExpensesButNoSettlements = useMemo(() => {
+    return expenses.length > 0 && settlements.length === 0
+  }, [expenses.length, settlements.length])
 
   // Theme accent helpers
   const resolveColor = (g?: Group | null) => {
@@ -660,7 +756,7 @@ export default function App() {
                         <div className="min-w-0 flex-1">
                           <h3 className="mobile-text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">{g.name}</h3>
                           <p className="text-sm text-slate-600 dark:text-slate-400">
-                            {(state.membersByGroupId[g.id] || []).length} members
+                            {(state.membersByGroupId[g.id] || []).length + (state.nonMembersByGroupId[g.id] || []).length} members
                           </p>
                         </div>
                       </div>
@@ -794,14 +890,24 @@ export default function App() {
                     <h3 className="font-semibold text-slate-900 dark:text-slate-100">Group Members</h3>
                     <div className="space-y-2">
                       {(state.membersByGroupId[currentGroupId!]||[]).map(m => (
-                        <div key={m.id} className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${getAvatarClasses(groupColor)}`}>
-                            {m.name.charAt(0).toUpperCase()}
+                        <div key={m.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${getAvatarClasses(groupColor)}`}>
+                              {m.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{m.name}</div>
+                              <div className="text-xs text-slate-500 truncate">{m.phone}</div>
+                            </div>
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{m.name}</div>
-                            <div className="text-xs text-slate-500 truncate">{m.phone}</div>
-                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => removeMemberFromGroup(m)}
+                            className="text-slate-400 hover:text-red-500 p-1"
+                          >
+                            ×
+                          </Button>
                         </div>
                       ))}
                     </div>
@@ -811,14 +917,24 @@ export default function App() {
                         <h4 className="text-sm font-medium text-slate-600 dark:text-slate-400">Invited (SMS notifications)</h4>
                         <div className="space-y-2">
                           {(state.nonMembersByGroupId[currentGroupId!]||[]).map((nm, idx) => (
-                            <div key={idx} className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-blue-50 dark:bg-blue-900/20">
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-green-500 to-blue-600 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
-                                📱
+                            <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-blue-50 dark:bg-blue-900/20">
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-r from-green-500 to-blue-600 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+                                  📱
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{nm.name || 'Unknown'}</div>
+                                  <div className="text-xs text-slate-500 truncate">{nm.phone}</div>
+                                </div>
                               </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{nm.name || 'Unknown'}</div>
-                                <div className="text-xs text-slate-500 truncate">{nm.phone}</div>
-                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => removeNonMemberFromGroup(nm)}
+                                className="text-slate-400 hover:text-red-500 p-1"
+                              >
+                                ×
+                              </Button>
                             </div>
                           ))}
                         </div>
@@ -917,6 +1033,7 @@ export default function App() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  {/* Full Members */}
                   {members.map(m=>{
                     const amt = balances[m.phone] ?? 0
                     const pos = amt >= 0
@@ -947,6 +1064,43 @@ export default function App() {
                       </div>
                     )
                   })}
+                  
+                  {/* Invited Members */}
+                  {nonMembers.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-medium text-slate-600 dark:text-slate-400">Invited (SMS notifications)</h4>
+                      {nonMembers.map((nm, idx) => {
+                        const amt = balances[nm.phone] ?? 0
+                        const pos = amt >= 0
+                        return (
+                          <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-blue-50 dark:bg-blue-900/20">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-green-500 to-blue-600 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+                                📱
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{nm.name || 'Unknown'}</div>
+                                <div className="text-xs text-slate-500 truncate">{nm.phone}</div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className={`font-semibold flex-shrink-0 ${pos? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                                {pos ? '+' : ''}${(amt/100).toFixed(2)}
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => removeNonMemberFromGroup(nm)}
+                                className="text-slate-400 hover:text-red-500 p-1"
+                              >
+                                ×
+                              </Button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
               
@@ -964,7 +1118,12 @@ export default function App() {
                     {settlements.length===0 ? (
                       <div className="text-center py-6">
                         <Sparkles className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                        <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">All settled up!</p>
+                        <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">
+                          {hasExpensesButNoSettlements 
+                            ? "No settlements needed - expenses are balanced within the group"
+                            : "All settled up!"
+                          }
+                        </p>
                       </div>
                     ) : (
                       settlements.map((t,i)=>{
@@ -998,16 +1157,28 @@ export default function App() {
                                   <span className="font-medium text-slate-900 dark:text-slate-100 text-sm">{to}</span>
                                 </div>
                               </div>
-                              {isCurrentUserOwing && hasVenmoUsername && (
-                                <a
-                                  href={generateVenmoLink(toUser!.venmo!, t.amount/100, `Payment to ${to} from ${from}`)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-3 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
-                                >
-                                  Pay with Venmo
-                                </a>
-                              )}
+                              <div className="flex gap-2">
+                                {isCurrentUserOwing && hasVenmoUsername && (
+                                  <a
+                                    href={generateVenmoLink(toUser!.venmo!, t.amount/100, `Payment to ${to} from ${from}`)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-3 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+                                  >
+                                    Pay with Venmo
+                                  </a>
+                                )}
+                                {!isCurrentUserOwing && me?.venmo && (
+                                  <a
+                                    href={generateVenmoLink(me.venmo, t.amount/100, `Payment from ${from} to ${to}`)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-3 py-1 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors"
+                                  >
+                                    Request via Venmo
+                                  </a>
+                                )}
+                              </div>
                             </div>
                           </div>
                         )
@@ -1152,13 +1323,16 @@ export default function App() {
                   <SelectValue placeholder="Select who paid" />
                 </SelectTrigger>
                 <SelectContent>
-                  {members.map(m=> (
-                    <SelectItem key={m.id} value={m.phone}>
+                  {allParticipants.map(p=> (
+                    <SelectItem key={p.phone} value={p.phone}>
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold">
-                          {m.name.charAt(0).toUpperCase()}
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold ${p.isMember ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-gradient-to-r from-green-500 to-blue-600'}`}>
+                          {p.isMember ? p.name.charAt(0).toUpperCase() : '📱'}
                         </div>
-                        {m.name}
+                        <div className="flex flex-col">
+                          <span>{p.name}</span>
+                          {!p.isMember && <span className="text-xs text-slate-500">(invited)</span>}
+                        </div>
                       </div>
                     </SelectItem>
                   ))}
@@ -1397,6 +1571,46 @@ export default function App() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* SMS Debugger Toasts */}
+      <div className="fixed top-20 right-4 z-[9999] space-y-2">
+        {smsToasts.map(toast => (
+          <div
+            key={toast.id}
+            className="bg-white dark:bg-slate-800 border-2 border-blue-500 dark:border-blue-400 rounded-lg shadow-xl p-4 max-w-sm transform transition-all duration-300 ease-in-out"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-r from-green-500 to-blue-600 flex items-center justify-center">
+                  <Smartphone className="w-4 h-4 text-white" />
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
+                    {toast.name}
+                  </div>
+                  <button
+                    onClick={() => setSmsToasts(prev => prev.filter(t => t.id !== toast.id))}
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                  {toast.phone}
+                </div>
+                <div className="text-sm text-slate-700 dark:text-slate-300">
+                  {toast.message}
+                </div>
+                <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                  {new Date(toast.timestamp).toLocaleTimeString()}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
       </div>
   )
 }
