@@ -10,7 +10,7 @@ import { Plus, Users, DollarSign, ArrowLeft, LogOut, Sparkles, Trash2, MessageSq
 import { setThemeColors, getAvatarClasses } from '@/lib/utils'
 // DatabaseTest will be imported dynamically
 
-type User = { id: string; phone: string; name: string; venmo?: string; passwordHash?: string }
+type User = { id: string; phone: string; name: string; email: string; venmo?: string; passwordHash?: string }
 type Group = { id: string; name: string; themeColor?: string; theme?: 'shadcn' | 'tweakcn' }
 type Member = { id: string; name: string; phone: string }
 type NonMember = { phone: string; name?: string; invitedAt: number; lastNotifiedAt?: number }
@@ -71,6 +71,7 @@ function verifyPassword(password: string, hash: string): boolean {
 function generateId(prefix: string) { return `${prefix}_${Math.random().toString(36).slice(2, 9)}_${Date.now().toString(36)}` }
 function normalizePhone(input: string) { const d = String(input||'').trim().replace(/[^\d+]/g,''); if (d.startsWith('+')) return d; if (d.length===10) return '+1'+d; return d }
 function isValidPhone(input: string) { return /^\+?\d{7,15}$/.test(normalizePhone(input)) }
+function isValidEmail(email: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) }
 
 // Generate Venmo payment link with auto-fill parameters
 function generateVenmoLink(venmoUsername: string, amount: number, note?: string): string {
@@ -191,8 +192,11 @@ export default function App() {
   // Auth minimal (mock OTP)
   const [authName, setAuthName] = useState('')
   const [authPhone, setAuthPhone] = useState('')
+  const [authEmail, setAuthEmail] = useState('')
   const [authPassword, setAuthPassword] = useState('')
   const [showSignupForm, setShowSignupForm] = useState(false)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [resetEmail, setResetEmail] = useState('')
 
   // Wizard state
   const [step, setStep] = useState<1 | 2 | 3>(1)
@@ -261,22 +265,53 @@ export default function App() {
     setAuthPassword('')
   }
 
+  const onForgotPassword = () => {
+    if (!isValidEmail(resetEmail)) return alert('Enter a valid email address')
+    
+    const user = state.users.find(u => u.email === resetEmail.trim())
+    if (!user) {
+      alert('No account found with this email address.')
+      return
+    }
+    
+    // Generate a simple reset token (in production, this would be more secure)
+    const resetToken = Math.random().toString(36).slice(2, 15)
+    
+    // Add SMS toast to simulate email
+    addSMSToast(
+      user.phone,
+      user.name,
+      `Password reset link sent to ${resetEmail}. Click here to reset: http://localhost:5175/reset?token=${resetToken}`,
+      setSmsToasts
+    )
+    
+    alert('Password reset instructions have been sent to your email.')
+    setResetEmail('')
+    setShowForgotPassword(false)
+  }
+
   const onSignup = () => {
     const phone = normalizePhone(authPhone)
     if (!authName.trim() || !isValidPhone(phone)) return alert('Enter a name and valid phone')
+    if (!isValidEmail(authEmail)) return alert('Enter a valid email address')
     if (!authPassword.trim()) return alert('Please enter a password')
     
     let user = state.users.find(u => u.phone === phone)
     if (user) return alert('User already exists. Please login instead.')
     
+    // Check if email is already used
+    const existingEmailUser = state.users.find(u => u.email === authEmail.trim())
+    if (existingEmailUser) return alert('Email already registered. Please use a different email.')
+    
     const passwordHash = hashPassword(authPassword)
-    user = { id: generateId('usr'), phone, name: authName.trim(), passwordHash }
+    user = { id: generateId('usr'), phone, name: authName.trim(), email: authEmail.trim(), passwordHash }
     setState(prev => ({ ...prev, users: [...prev.users, user!] }))
     setMe(user)
     
     // Clear auth form and close signup
     setAuthName('')
     setAuthPhone('')
+    setAuthEmail('')
     setAuthPassword('')
     setShowSignupForm(false)
   }
@@ -614,63 +649,120 @@ export default function App() {
               <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
             </div>
             <h1 className="mobile-text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">
-              {showSignupForm ? 'Join Dolla' : 'Welcome Back'}
+              {showForgotPassword ? 'Reset Password' : showSignupForm ? 'Join Dolla' : 'Welcome Back'}
             </h1>
             <p className="mobile-text-lg text-slate-600 dark:text-slate-400">
-              {showSignupForm ? 'Create your account to get started' : 'Login to your account'}
+              {showForgotPassword ? 'Enter your email to receive reset instructions' : showSignupForm ? 'Create your account to get started' : 'Login to your account'}
             </p>
           </div>
           <Card className="mobile-card border-0 shadow-xl">
             <CardContent className="p-4 sm:p-8 space-y-4 sm:space-y-6">
-              {showSignupForm && (
-                <div className="space-y-2">
-                  <Label htmlFor="name" className="text-sm font-medium text-slate-700 dark:text-slate-300">Your name</Label>
-                  <Input 
-                    id="name" 
-                    placeholder="Enter your name" 
-                    value={authName} 
-                    onChange={e=>setAuthName(e.target.value)}
-                    className="mobile-input"
-                  />
-                </div>
+              {showForgotPassword ? (
+                // Forgot Password Form
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="reset-email" className="text-sm font-medium text-slate-700 dark:text-slate-300">Email address</Label>
+                    <Input 
+                      id="reset-email" 
+                      type="email"
+                      placeholder="Enter your email address" 
+                      value={resetEmail} 
+                      onChange={e=>setResetEmail(e.target.value)}
+                      className="mobile-input"
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <Button 
+                      onClick={onForgotPassword} 
+                      className="mobile-button w-full"
+                    >
+                      Send Reset Instructions
+                    </Button>
+                    <div className="text-center">
+                      <button 
+                        onClick={() => setShowForgotPassword(false)}
+                        className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"
+                      >
+                        Back to Login
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                // Login/Signup Form
+                <>
+                  {showSignupForm && (
+                    <div className="space-y-2">
+                      <Label htmlFor="name" className="text-sm font-medium text-slate-700 dark:text-slate-300">Your name</Label>
+                      <Input 
+                        id="name" 
+                        placeholder="Enter your name" 
+                        value={authName} 
+                        onChange={e=>setAuthName(e.target.value)}
+                        className="mobile-input"
+                      />
+                    </div>
+                  )}
+                  {showSignupForm && (
+                    <div className="space-y-2">
+                      <Label htmlFor="email" className="text-sm font-medium text-slate-700 dark:text-slate-300">Email address</Label>
+                      <Input 
+                        id="email" 
+                        type="email"
+                        placeholder="Enter your email" 
+                        value={authEmail} 
+                        onChange={e=>setAuthEmail(e.target.value)}
+                        className="mobile-input"
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="phone" className="text-sm font-medium text-slate-700 dark:text-slate-300">Phone number</Label>
+                    <Input 
+                      id="phone" 
+                      placeholder="+1 (555) 123-4567" 
+                      value={authPhone} 
+                      onChange={e=>setAuthPhone(e.target.value)}
+                      className="mobile-input"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password" className="text-sm font-medium text-slate-700 dark:text-slate-300">Password</Label>
+                    <Input 
+                      id="password" 
+                      type="password"
+                      placeholder="Enter your password" 
+                      value={authPassword} 
+                      onChange={e=>setAuthPassword(e.target.value)}
+                      className="mobile-input"
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <Button 
+                      onClick={showSignupForm ? onSignup : onLogin} 
+                      className="mobile-button w-full"
+                    >
+                      {showSignupForm ? 'Create Account' : 'Login'}
+                    </Button>
+                    <div className="text-center space-y-2">
+                      <button 
+                        onClick={() => setShowSignupForm(!showSignupForm)}
+                        className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline block"
+                      >
+                        {showSignupForm ? 'Already have an account? Login' : "Don't have an account? Sign up"}
+                      </button>
+                      {!showSignupForm && (
+                        <button 
+                          onClick={() => setShowForgotPassword(true)}
+                          className="text-sm text-slate-600 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 underline block"
+                        >
+                          Forgot your password?
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </>
               )}
-              <div className="space-y-2">
-                <Label htmlFor="phone" className="text-sm font-medium text-slate-700 dark:text-slate-300">Phone number</Label>
-                <Input 
-                  id="phone" 
-                  placeholder="+1 (555) 123-4567" 
-                  value={authPhone} 
-                  onChange={e=>setAuthPhone(e.target.value)}
-                  className="mobile-input"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm font-medium text-slate-700 dark:text-slate-300">Password</Label>
-                <Input 
-                  id="password" 
-                  type="password"
-                  placeholder="Enter your password" 
-                  value={authPassword} 
-                  onChange={e=>setAuthPassword(e.target.value)}
-                  className="mobile-input"
-                />
-              </div>
-              <div className="space-y-3">
-                <Button 
-                  onClick={showSignupForm ? onSignup : onLogin} 
-                  className="mobile-button w-full"
-                >
-                  {showSignupForm ? 'Create Account' : 'Login'}
-                </Button>
-                <div className="text-center">
-                  <button 
-                    onClick={() => setShowSignupForm(!showSignupForm)}
-                    className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline"
-                  >
-                    {showSignupForm ? 'Already have an account? Login' : "Don't have an account? Sign up"}
-                  </button>
-                </div>
-              </div>
             </CardContent>
           </Card>
         </div>
